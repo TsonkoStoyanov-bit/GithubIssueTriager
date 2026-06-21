@@ -156,6 +156,25 @@
             _errorMessage = $"could not load fixtures from the API: {ex.Message}";
             _errorHint = "check that GithubIssueTriager.Api is running and Api:BaseUrl is correct";
         }
+
+        // Pre-fill the Remote tab from the configured GitHub defaults (Settings page) so this
+        // tab acts as an editable override of the saved owner/repo/issue rather than repeating
+        // unrelated placeholder values. The token stays Settings-only (it's secret). Best-effort:
+        // a settings fetch failure just leaves the built-in placeholder defaults in place.
+        try
+        {
+            var settings = await Api.GetSettingsAsync();
+            if (settings is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(settings.GitHubOwner)) _owner = settings.GitHubOwner;
+                if (!string.IsNullOrWhiteSpace(settings.GitHubRepo)) _remoteRepo = settings.GitHubRepo;
+                if (settings.GitHubIssueNumber > 0) _issueNumber = settings.GitHubIssueNumber;
+            }
+        }
+        catch
+        {
+            // ignore — keep the placeholder defaults
+        }
     }
 
     private async Task TriageSelectedFixture()

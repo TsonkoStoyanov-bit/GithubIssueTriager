@@ -5,6 +5,14 @@ using Microsoft.FluentUI.AspNetCore.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Serve the RCL/framework static web assets (_framework/blazor.web.js, _content/*, the scoped
+// CSS bundle) even when the app runs from build output instead of `dotnet publish` -- e.g.
+// Visual Studio's Docker "Fast Mode", which mounts build output into the container. Without
+// this, MapStaticAssets' dev handler 500s with "Could not find file .../blazor.web.js" because
+// those assets live in the static-web-assets manifest, not physically under wwwroot. In a
+// published container this is a harmless no-op (no runtime manifest is present).
+builder.WebHost.UseStaticWebAssets();
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
