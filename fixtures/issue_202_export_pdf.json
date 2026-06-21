@@ -1,0 +1,11 @@
+{
+  "number": 202,
+  "title": "Allow exporting dashboards as PDF",
+  "body": "Right now dashboards can only be viewed in-browser or exported as a PNG screenshot, which doesn't look great when we attach it to a weekly report. It would be great to have a proper PDF export option with selectable page size, similar to how the reports section already does it.\n\nNot blocking anything today, just a convenience request from a few people on the analytics team.",
+  "html_url": "https://github.com/example-org/example-repo/issues/202",
+  "user": {"login": "marcus-analytics"},
+  "state": "open",
+  "labels": [],
+  "comments": 2,
+  "created_at": "2026-06-12T14:30:00Z"
+}

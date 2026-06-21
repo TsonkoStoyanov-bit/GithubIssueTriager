@@ -1,0 +1,91 @@
+@page "/settings"
+
+<PageTitle>Settings</PageTitle>
+
+<FluentLabel Typo="Typography.PageTitle">Configuration</FluentLabel>
+<FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin-bottom:16px;">
+    Read from / written back to <code>appsettings.json</code> on the Api host (the <code>Triage</code> section).
+</FluentLabel>
+
+@if (_settings is null)
+{
+    <FluentProgressRing />
+}
+else
+{
+    <FluentStack Orientation="Orientation.Vertical" VerticalGap="16" Style="max-width:560px">
+
+        <FluentCard>
+            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">Issue source</FluentLabel>
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+                <FluentRadioGroup TValue="string" Name="issueSource" @bind-Value="_settings.IssueSource" Label="Issue source" Orientation="Orientation.Horizontal">
+                    <FluentRadio Value="@("Local")">Local JSON</FluentRadio>
+                    <FluentRadio Value="@("Remote")">Remote (GitHub API)</FluentRadio>
+                </FluentRadioGroup>
+                <FluentTextField @bind-Value="_settings.LocalJsonPath" Label="Local JSON folder (relative to Api content root)" />
+            </FluentStack>
+        </FluentCard>
+
+        <FluentCard>
+            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">GitHub API</FluentLabel>
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+                <FluentTextField @bind-Value="_settings.GitHubOwner" Label="Default owner" Placeholder="anthropics" />
+                <FluentTextField @bind-Value="_settings.GitHubRepo" Label="Default repo" Placeholder="claude-code" />
+                <FluentNumberField TValue="int" @bind-Value="_settings.GitHubIssueNumber" Label="Default issue number" />
+                <FluentTextField @bind-Value="_settings.GitHubToken" Label="Personal access token" TextFieldType="TextFieldType.Password" />
+            </FluentStack>
+        </FluentCard>
+
+        <FluentCard>
+            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">Priority thresholds (minimum score per level)</FluentLabel>
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityCritical" Label="Critical ≥" />
+                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityHigh" Label="High ≥" />
+                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityMedium" Label="Medium ≥" />
+            </FluentStack>
+        </FluentCard>
+
+        <FluentCard>
+            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">Classifier safety net</FluentLabel>
+            <FluentNumberField TValue="double" @bind-Value="_settings.LowConfidenceReviewThreshold" Label="Flag for human review when confidence is below" Step="0.05" Min="0" Max="1" />
+        </FluentCard>
+
+        <FluentButton Appearance="Appearance.Accent" Disabled="@_saving" @onclick="Save">
+            Save settings
+        </FluentButton>
+
+        @if (_savedMessage is not null)
+        {
+            <FluentMessageBar Intent="MessageIntent.Success" Title="Saved">@_savedMessage</FluentMessageBar>
+        }
+    </FluentStack>
+}
+
+@code {
+    private TriageSettingsDto? _settings;
+    private bool _saving;
+    private string? _savedMessage;
+
+    [Inject] private TriageApiClient Api { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await Api.GetSettingsAsync();
+    }
+
+    private async Task Save()
+    {
+        if (_settings is null) return;
+        _saving = true;
+        _savedMessage = null;
+
+        var updated = await Api.SaveSettingsAsync(_settings);
+        _saving = false;
+
+        if (updated is not null)
+        {
+            _settings = updated;
+            _savedMessage = "Settings saved to appsettings.json on the Api host.";
+        }
+    }
+}

@@ -1,0 +1,170 @@
+@page "/"
+
+<PageTitle>Triage</PageTitle>
+
+<FluentLabel Typo="Typography.PageTitle">Triage an issue</FluentLabel>
+
+<FluentTabs @bind-ActiveTabId="_activeTabId">
+    <FluentTab Id="tab-local" Label="Local JSON">
+        <FluentStack Orientation="Orientation.Vertical" Style="max-width:480px">
+            <FluentSelect TOption="string" Items="@_fixtures" @bind-SelectedOption="_selectedFixture" Placeholder="Choose a fixture file" />
+            <FluentTextField @bind-Value="_repoLabel" Label="Repo label (for history)" Placeholder="example-org/example-repo" />
+            <FluentStack Orientation="Orientation.Horizontal">
+                <FluentButton Appearance="Appearance.Accent" Disabled="@(_selectedFixture is null || _busy)" @onclick="TriageSelectedFixture">
+                    Triage selected file
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Outline" Disabled="@_busy" @onclick="TriageAllFixtures">
+                    Batch-triage all fixtures
+                </FluentButton>
+            </FluentStack>
+        </FluentStack>
+    </FluentTab>
+
+    <FluentTab Id="tab-remote" Label="Remote GitHub API">
+        <FluentStack Orientation="Orientation.Vertical" Style="max-width:480px">
+            <FluentTextField @bind-Value="_owner" Label="Owner" Placeholder="anthropics" />
+            <FluentTextField @bind-Value="_remoteRepo" Label="Repo" Placeholder="claude-code" />
+            <FluentNumberField TValue="int" @bind-Value="_issueNumber" Label="Issue number" />
+            <FluentButton Appearance="Appearance.Accent" Disabled="@_busy" @onclick="TriageRemote">
+                Fetch &amp; triage from GitHub
+            </FluentButton>
+            <FluentMessageBar Intent="MessageIntent.Info" Title="Note">
+                If the live API is unreachable, the Api returns a clear error instead of crashing —
+                use the Local JSON tab to keep testing the pipeline offline.
+            </FluentMessageBar>
+        </FluentStack>
+    </FluentTab>
+</FluentTabs>
+
+@if (_busy)
+{
+    <FluentProgressRing />
+}
+
+@if (_errorMessage is not null)
+{
+    <FluentMessageBar Intent="MessageIntent.Error" Title="Triage failed">
+        @_errorMessage
+        @if (_errorHint is not null)
+        {
+            <div><em>@_errorHint</em></div>
+        }
+    </FluentMessageBar>
+}
+
+@if (_results.Count > 0)
+{
+    <FluentLabel Typo="Typography.PaneHeader" Style="margin-top:16px;display:block;">Results</FluentLabel>
+    @foreach (var result in _results)
+    {
+        <FluentCard Class="result-card">
+            <FluentStack Orientation="Orientation.Horizontal" Style="justify-content:space-between; width:100%;">
+                <strong>#@result.Issue.Number — @result.Issue.Title</strong>
+                <FluentBadge Appearance="Appearance.Neutral">@result.Issue.Source</FluentBadge>
+            </FluentStack>
+
+            <FluentStack Orientation="Orientation.Horizontal" Style="margin-top:8px">
+                <FluentBadge Appearance="Appearance.Accent">@result.Classification.Category (@result.Classification.Confidence)</FluentBadge>
+                <FluentBadge Appearance="@PriorityAppearance(result.Priority.Priority)">@result.Priority.Priority (score=@result.Priority.Score)</FluentBadge>
+            </FluentStack>
+
+            <ul class="reason-list">
+                @foreach (var reason in result.Priority.Reasons)
+                {
+                    <li>@reason</li>
+                }
+            </ul>
+
+            <p><strong>Labels:</strong> @string.Join(", ", result.Labels.Labels)</p>
+            <p><strong>Next step:</strong> @result.Labels.NextStep</p>
+
+            @if (result.AlreadyTriagedBefore)
+            {
+                <FluentMessageBar Intent="MessageIntent.Warning" Title="Already triaged before">
+                    This issue has prior triage history — see the History page.
+                </FluentMessageBar>
+            }
+        </FluentCard>
+    }
+}
+
+@code {
+    private string _activeTabId = "tab-local";
+    private List<string> _fixtures = new();
+    private string? _selectedFixture;
+    private string _repoLabel = "example-org/example-repo";
+
+    private string _owner = "anthropics";
+    private string _remoteRepo = "claude-code";
+    private int _issueNumber = 1;
+
+    private bool _busy;
+    private string? _errorMessage;
+    private string? _errorHint;
+    private List<TriageResultDto> _results = new();
+
+    [Inject] private TriageApiClient Api { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _fixtures = await Api.GetFixturesAsync();
+        _selectedFixture = _fixtures.FirstOrDefault();
+    }
+
+    private async Task TriageSelectedFixture()
+    {
+        if (_selectedFixture is null) return;
+        await RunAndRender(() => Api.TriageJsonAsync(_selectedFixture!, _repoLabel));
+    }
+
+    private async Task TriageAllFixtures()
+    {
+        _busy = true;
+        _errorMessage = null;
+        _errorHint = null;
+        var result = await Api.TriageBatchAsync(_repoLabel);
+        _busy = false;
+
+        if (result.Success)
+        {
+            _results = result.Value!;
+        }
+        else
+        {
+            _errorMessage = result.Error;
+            _errorHint = result.Hint;
+        }
+    }
+
+    private async Task TriageRemote()
+    {
+        await RunAndRender(() => Api.TriageGitHubAsync(_owner, _remoteRepo, _issueNumber));
+    }
+
+    private async Task RunAndRender(Func<Task<ApiResult<TriageResultDto>>> action)
+    {
+        _busy = true;
+        _errorMessage = null;
+        _errorHint = null;
+
+        var result = await action();
+        _busy = false;
+
+        if (result.Success)
+        {
+            _results = new List<TriageResultDto> { result.Value! };
+        }
+        else
+        {
+            _errorMessage = result.Error;
+            _errorHint = result.Hint;
+        }
+    }
+
+    private static Appearance PriorityAppearance(string priority) => priority switch
+    {
+        "critical" => Appearance.Accent,
+        "high" => Appearance.Accent,
+        _ => Appearance.Neutral,
+    };
+}

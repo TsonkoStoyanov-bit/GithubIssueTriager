@@ -1,0 +1,11 @@
+{
+  "number": 201,
+  "title": "Worker process gets OOM-killed after a few hours under load",
+  "body": "We run the background worker in a container with a 512MB limit. After roughly 3-4 hours of steady traffic, memory usage climbs continuously until Kubernetes OOM-kills the pod and restarts it.\n\nHeap snapshot shows a growing number of retained `RequestContext` objects that never get released. Looks like a memory leak in the request pipeline introduced after upgrading to v2.3 -- this used to run fine for days before that release.\n\n```\nINFO  RequestContext count: 184302 (growing ~40/min)\n```\n\nThis is affecting every deployment we run, not just one environment.",
+  "html_url": "https://github.com/example-org/example-repo/issues/201",
+  "user": {"login": "priya-sre"},
+  "state": "open",
+  "labels": [],
+  "comments": 11,
+  "created_at": "2026-06-10T09:00:00Z"
+}

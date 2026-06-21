@@ -1,0 +1,47 @@
+@page "/history"
+
+<PageTitle>History</PageTitle>
+
+<FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" Style="justify-content:space-between;">
+    <FluentLabel Typo="Typography.PageTitle">Triage history</FluentLabel>
+    <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size16.ArrowClockwise())" @onclick="Load">Refresh</FluentButton>
+</FluentStack>
+
+@if (_records is null)
+{
+    <FluentProgressRing />
+}
+else if (_records.Count == 0)
+{
+    <FluentMessageBar Intent="MessageIntent.Info" Title="No history yet">
+        Triage an issue from the Triage page first.
+    </FluentMessageBar>
+}
+else
+{
+    <FluentDataGrid Items="@_records.AsQueryable()" Style="margin-top:16px">
+        <PropertyColumn Property="@(r => r.TriagedAt)" Title="Triaged at" Sortable="true" />
+        <PropertyColumn Property="@(r => r.Repo)" Title="Repo" Sortable="true" />
+        <PropertyColumn Property="@(r => r.IssueNumber)" Title="#" Sortable="true" />
+        <PropertyColumn Property="@(r => r.Title)" Title="Title" />
+        <PropertyColumn Property="@(r => r.Category)" Title="Category" Sortable="true" />
+        <PropertyColumn Property="@(r => r.Priority)" Title="Priority" Sortable="true" />
+        <TemplateColumn Title="Labels">
+            @(context.Labels != null ? string.Join(", ", context.Labels) : "")
+        </TemplateColumn>
+    </FluentDataGrid>
+}
+
+@code {
+    private List<TriageRecord>? _records;
+
+    [Inject] private TriageApiClient Api { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _records = null;
+        _records = await Api.GetHistoryAsync(100);
+    }
+}

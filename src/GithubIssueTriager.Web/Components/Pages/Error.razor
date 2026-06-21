@@ -1,0 +1,11 @@
+@page "/Error"
+
+<PageTitle>Error</PageTitle>
+
+<h1 class="text-danger">Error.</h1>
+<h2 class="text-danger">An error occurred while processing your request.</h2>
+
+<FluentMessageBar Intent="MessageIntent.Error" Title="Something went wrong">
+    Check the Api host's console output for details, and confirm it is running and reachable
+    at the Api:BaseUrl configured in this project's appsettings.json.
+</FluentMessageBar>

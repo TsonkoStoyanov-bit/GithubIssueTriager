@@ -1,0 +1,11 @@
+{
+  "number": 203,
+  "title": "What is the recommended way to paginate large result sets?",
+  "body": "I'm fetching upwards of 50k rows through the /items endpoint and wondering what the intended approach is. Is it possible to use cursor-based pagination, or should I be chunking by page number and limit? Couldn't find a clear example of this in the docs. Any guidance appreciated.",
+  "html_url": "https://github.com/example-org/example-repo/issues/203",
+  "user": {"login": "devon-builds"},
+  "state": "open",
+  "labels": [],
+  "comments": 0,
+  "created_at": "2026-06-14T11:15:00Z"
+}
