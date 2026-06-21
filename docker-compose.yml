@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      Database__ConnectionString: "Host=db;Port=5432;Database=issue_triager;Username=postgres;Password=postgres"
+      Database__ConnectionString: "Host=db;Port=5432;Database=issue_triager;Username=postgres;Password=postgres;Gss Encryption Mode=Disable"
       Cors__AllowedOrigins__0: "http://web:8080"
     ports:
       - "5101:8080"
@@ -36,8 +36,11 @@ services:
       - api
     environment:
       Api__BaseUrl: "http://api:8080"
+    volumes:
+      - triager-web-keys:/keys
     ports:
       - "5100:8080"
 
 volumes:
   triager-db-data:
+  triager-web-keys:

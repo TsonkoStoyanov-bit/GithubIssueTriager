@@ -6,12 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
+    @* The scoped-CSS bundle is an @import of Fluent UI's component stylesheet -- it carries
+       ALL the layout/structural CSS for FluentLayout/FluentHeader/FluentStack/FluentNavMenu.
+       Without this link those components render as unstyled, collapsed HTML (header not a bar,
+       nav not a sidebar) -- i.e. "nothing shows / the page looks broken". Must come before
+       app.css so app.css overrides win. *@
+    <link rel="stylesheet" href="GithubIssueTriager.Web.styles.css" />
     <link rel="stylesheet" href="app.css" />
+    @* Registers the Fluent UI web components (<fluent-button>, <fluent-card>, ...) as real
+       custom elements. Without this, the browser doesn't know what those tags are and just
+       renders their contents as plain unstyled HTML -- which is exactly what "looks like a
+       page with no styles" means. Loaded as a module, before Blazor starts. *@
+    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module" async></script>
+    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/js/loading-theme.js" type="text/javascript"></script>
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 <body>
+    <loading-theme storage-name="theme"></loading-theme>
     <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
-    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/js/loading-theme.js"></script>
 </body>
 </html>

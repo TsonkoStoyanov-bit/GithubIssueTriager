@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace GithubIssueTriager.Api.Data;
 
@@ -27,10 +28,18 @@ public class TriageDbContext : DbContext
             // Stored as a JSON-encoded string column, same on-disk shape the
             // hand-written ADO.NET version used, just serialized/deserialized
             // automatically by EF Core instead of by hand in the store class.
+            // The explicit ValueComparer tells EF how to detect changes and
+            // snapshot this collection correctly -- without it, EF logs a
+            // model-validation warning and falls back to reference equality,
+            // which can't tell two structurally-identical lists apart.
             entity.Property(e => e.Labels)
                 .HasConversion(
                     labels => JsonSerializer.Serialize(labels, (JsonSerializerOptions?)null),
-                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>());
+                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>(),
+                    new ValueComparer<List<string>>(
+                        (a, b) => (a ?? new List<string>()).SequenceEqual(b ?? new List<string>()),
+                        labels => labels.Aggregate(0, (hash, label) => HashCode.Combine(hash, label.GetHashCode())),
+                        labels => labels.ToList()));
         });
     }
 }

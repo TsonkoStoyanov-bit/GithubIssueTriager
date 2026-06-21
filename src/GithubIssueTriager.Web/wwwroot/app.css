@@ -12,18 +12,39 @@ html, body {
 }
 
 .content {
-    max-width: 960px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Give the form and result cards a touch more breathing room and a softer,
+   elevated feel than the default flat Fluent card. */
+.form-card {
+    padding: 20px 24px;
+    margin-bottom: 8px;
 }
 
 .result-card {
-    margin-bottom: 16px;
+    padding: 20px 24px;
+    border-radius: 8px;
+    transition: box-shadow 0.15s ease-in-out;
 }
 
+.result-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+}
+
+/* Use the Fluent design tokens instead of a hardcoded gray so the list reads
+   correctly in both light and dark mode. */
 .reason-list {
     margin: 4px 0 0 0;
-    padding-left: 18px;
-    color: #555;
+    padding-left: 20px;
+    color: var(--neutral-foreground-hint, #666);
     font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.reason-list li {
+    margin-bottom: 2px;
 }
 
 #blazor-error-ui {

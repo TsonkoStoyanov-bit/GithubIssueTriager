@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using GithubIssueTriager.Shared.Models;
 
 namespace GithubIssueTriager.Web.Services;
@@ -16,23 +17,14 @@ public class TriageApiClient
     public async Task<List<string>> GetFixturesAsync(CancellationToken ct = default) =>
         await _http.GetFromJsonAsync<List<string>>("/api/triage/fixtures", ct) ?? new();
 
-    public async Task<ApiResult<TriageResultDto>> TriageJsonAsync(string fileName, string? repo, CancellationToken ct = default)
-    {
-        var response = await _http.PostAsJsonAsync("/api/triage/json", new TriageLocalRequest(fileName, repo), ct);
-        return await ToApiResultAsync<TriageResultDto>(response, ct);
-    }
+    public Task<ApiResult<TriageResultDto>> TriageJsonAsync(string fileName, string? repo, CancellationToken ct = default) =>
+        SendAsync<TriageResultDto>(() => _http.PostAsJsonAsync("/api/triage/json", new TriageLocalRequest(fileName, repo), ct), ct);
 
-    public async Task<ApiResult<TriageResultDto>> TriageGitHubAsync(string owner, string repo, int number, CancellationToken ct = default)
-    {
-        var response = await _http.PostAsJsonAsync("/api/triage/github", new TriageGitHubRequest(owner, repo, number), ct);
-        return await ToApiResultAsync<TriageResultDto>(response, ct);
-    }
+    public Task<ApiResult<TriageResultDto>> TriageGitHubAsync(string owner, string repo, int number, CancellationToken ct = default) =>
+        SendAsync<TriageResultDto>(() => _http.PostAsJsonAsync("/api/triage/github", new TriageGitHubRequest(owner, repo, number), ct), ct);
 
-    public async Task<ApiResult<List<TriageResultDto>>> TriageBatchAsync(string? repo, CancellationToken ct = default)
-    {
-        var response = await _http.PostAsJsonAsync("/api/triage/batch", new TriageBatchRequest(repo), ct);
-        return await ToApiResultAsync<List<TriageResultDto>>(response, ct);
-    }
+    public Task<ApiResult<List<TriageResultDto>>> TriageBatchAsync(string? repo, CancellationToken ct = default) =>
+        SendAsync<List<TriageResultDto>>(() => _http.PostAsJsonAsync("/api/triage/batch", new TriageBatchRequest(repo), ct), ct);
 
     public async Task<List<TriageRecord>> GetHistoryAsync(int limit = 50, CancellationToken ct = default) =>
         await _http.GetFromJsonAsync<List<TriageRecord>>($"/api/history?limit={limit}", ct) ?? new();
@@ -47,6 +39,33 @@ public class TriageApiClient
         return await response.Content.ReadFromJsonAsync<TriageSettingsDto>(cancellationToken: ct);
     }
 
+    /// <summary>
+    /// Runs an HTTP call and always returns an <see cref="ApiResult{T}"/> — network failures
+    /// (Api unreachable, timeouts) and unexpected non-JSON error bodies are turned into a
+    /// failed result with a friendly message instead of bubbling up as an exception that would
+    /// break the Blazor circuit before the page can show anything.
+    /// </summary>
+    private static async Task<ApiResult<T>> SendAsync<T>(Func<Task<HttpResponseMessage>> send, CancellationToken ct)
+    {
+        try
+        {
+            using var response = await send();
+            return await ToApiResultAsync<T>(response, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw; // genuine caller cancellation — let it propagate
+        }
+        catch (TaskCanceledException)
+        {
+            return ApiResult<T>.Fail("the request to the API timed out", "the Api may be slow or unreachable — check that it is running");
+        }
+        catch (HttpRequestException ex)
+        {
+            return ApiResult<T>.Fail($"could not reach the API: {ex.Message}", "check that GithubIssueTriager.Api is running and Api:BaseUrl is correct");
+        }
+    }
+
     private static async Task<ApiResult<T>> ToApiResultAsync<T>(HttpResponseMessage response, CancellationToken ct)
     {
         if (response.IsSuccessStatusCode)
@@ -55,8 +74,19 @@ public class TriageApiClient
             return ApiResult<T>.Ok(value!);
         }
 
-        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>(cancellationToken: ct);
-        return ApiResult<T>.Fail(error?.Error ?? $"request failed with status {(int)response.StatusCode}", error?.Hint);
+        // The Api returns a JSON ApiErrorResponse for handled failures (400/404/502), but an
+        // unhandled 500 yields an HTML error page or empty body — reading that as JSON throws,
+        // so fall back to the status code rather than letting the exception escape.
+        var fallback = $"request failed with status {(int)response.StatusCode} ({response.ReasonPhrase})";
+        try
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>(cancellationToken: ct);
+            return ApiResult<T>.Fail(error?.Error ?? fallback, error?.Hint);
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            return ApiResult<T>.Fail(fallback, "the Api returned an unexpected (non-JSON) error response");
+        }
     }
 }
 

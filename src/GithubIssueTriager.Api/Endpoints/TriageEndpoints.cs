@@ -11,6 +11,9 @@ public static class TriageEndpoints
 
         group.MapPost("/json", async (TriageLocalRequest req, TriageOrchestrator orchestrator, IWebHostEnvironment env, CancellationToken ct) =>
         {
+            if (string.IsNullOrWhiteSpace(req.FileName))
+                return Results.BadRequest(new ApiErrorResponse("fileName is required", "check GET /api/triage/fixtures for available files"));
+
             var localPath = Path.Combine(env.ContentRootPath, "fixtures", req.FileName);
             if (!File.Exists(localPath))
                 return Results.NotFound(new ApiErrorResponse($"fixture not found: {req.FileName}", "check GET /api/triage/fixtures for available files"));
@@ -21,6 +24,9 @@ public static class TriageEndpoints
 
         group.MapPost("/github", async (TriageGitHubRequest req, TriageOrchestrator orchestrator, Microsoft.Extensions.Options.IOptionsMonitor<TriageOptions> options, CancellationToken ct) =>
         {
+            if (string.IsNullOrWhiteSpace(req.Owner) || string.IsNullOrWhiteSpace(req.Repo))
+                return Results.BadRequest(new ApiErrorResponse("owner and repo are required", null));
+
             try
             {
                 var token = options.CurrentValue.GitHub.Token;

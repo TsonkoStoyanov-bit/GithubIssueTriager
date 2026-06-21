@@ -4,46 +4,57 @@
 
 <FluentLabel Typo="Typography.PageTitle">Triage an issue</FluentLabel>
 
-<FluentTabs @bind-ActiveTabId="_activeTabId">
-    <FluentTab Id="tab-local" Label="Local JSON">
-        <FluentStack Orientation="Orientation.Vertical" Style="max-width:480px">
-            <FluentSelect TOption="string" Items="@_fixtures" @bind-SelectedOption="_selectedFixture" Placeholder="Choose a fixture file" />
-            <FluentTextField @bind-Value="_repoLabel" Label="Repo label (for history)" Placeholder="example-org/example-repo" />
-            <FluentStack Orientation="Orientation.Horizontal">
-                <FluentButton Appearance="Appearance.Accent" Disabled="@(_selectedFixture is null || _busy)" @onclick="TriageSelectedFixture">
-                    Triage selected file
-                </FluentButton>
-                <FluentButton Appearance="Appearance.Outline" Disabled="@_busy" @onclick="TriageAllFixtures">
-                    Batch-triage all fixtures
-                </FluentButton>
-            </FluentStack>
-        </FluentStack>
-    </FluentTab>
+<FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin:4px 0 20px;">
+    Classify, score and label a GitHub issue — from a local fixture or straight off the GitHub API.
+</FluentLabel>
 
-    <FluentTab Id="tab-remote" Label="Remote GitHub API">
-        <FluentStack Orientation="Orientation.Vertical" Style="max-width:480px">
-            <FluentTextField @bind-Value="_owner" Label="Owner" Placeholder="anthropics" />
-            <FluentTextField @bind-Value="_remoteRepo" Label="Repo" Placeholder="claude-code" />
-            <FluentNumberField TValue="int" @bind-Value="_issueNumber" Label="Issue number" />
-            <FluentButton Appearance="Appearance.Accent" Disabled="@_busy" @onclick="TriageRemote">
-                Fetch &amp; triage from GitHub
-            </FluentButton>
-            <FluentMessageBar Intent="MessageIntent.Info" Title="Note">
-                If the live API is unreachable, the Api returns a clear error instead of crashing —
-                use the Local JSON tab to keep testing the pipeline offline.
-            </FluentMessageBar>
-        </FluentStack>
-    </FluentTab>
-</FluentTabs>
+<FluentCard Class="form-card">
+    <FluentTabs @bind-ActiveTabId="_activeTabId">
+        <FluentTab Id="tab-local" Label="Local JSON" Icon="@(new Icons.Regular.Size20.DocumentText())">
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="16" Style="max-width:480px;padding-top:8px">
+                <FluentSelect TOption="string" Items="@_fixtures"
+                              OptionValue="@(f => f)" OptionText="@(f => f)"
+                              @bind-Value="_selectedFixture" Label="Fixture file" Placeholder="Choose a fixture file" Style="width:100%" />
+                <FluentTextField @bind-Value="_repoLabel" Label="Repo label (for history)" Placeholder="example-org/example-repo" Style="width:100%" />
+                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8">
+                    <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size16.Flash())" Disabled="@(string.IsNullOrWhiteSpace(_selectedFixture) || _busy)" @onclick="TriageSelectedFixture">
+                        Triage selected file
+                    </FluentButton>
+                    <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size16.LayerDiagonal())" Disabled="@_busy" @onclick="TriageAllFixtures">
+                        Batch-triage all fixtures
+                    </FluentButton>
+                </FluentStack>
+            </FluentStack>
+        </FluentTab>
+
+        <FluentTab Id="tab-remote" Label="Remote GitHub API" Icon="@(new Icons.Regular.Size20.Cloud())">
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="16" Style="max-width:480px;padding-top:8px">
+                <FluentTextField @bind-Value="_owner" Label="Owner" Placeholder="anthropics" Style="width:100%" />
+                <FluentTextField @bind-Value="_remoteRepo" Label="Repo" Placeholder="claude-code" Style="width:100%" />
+                <FluentNumberField TValue="int" @bind-Value="_issueNumber" Label="Issue number" Style="width:100%" />
+                <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size16.CloudArrowDown())" Disabled="@_busy" @onclick="TriageRemote">
+                    Fetch &amp; triage from GitHub
+                </FluentButton>
+                <FluentMessageBar Intent="MessageIntent.Info" Title="Note">
+                    If the live API is unreachable, the Api returns a clear error instead of crashing —
+                    use the Local JSON tab to keep testing the pipeline offline.
+                </FluentMessageBar>
+            </FluentStack>
+        </FluentTab>
+    </FluentTabs>
+</FluentCard>
 
 @if (_busy)
 {
-    <FluentProgressRing />
+    <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="8" Style="margin-top:24px">
+        <FluentProgressRing Style="width:24px;height:24px" />
+        <FluentLabel Typo="Typography.Body" Color="Color.Neutral">Running the triage pipeline…</FluentLabel>
+    </FluentStack>
 }
 
 @if (_errorMessage is not null)
 {
-    <FluentMessageBar Intent="MessageIntent.Error" Title="Triage failed">
+    <FluentMessageBar Intent="MessageIntent.Error" Title="Triage failed" Style="margin-top:16px">
         @_errorMessage
         @if (_errorHint is not null)
         {
@@ -54,38 +65,66 @@
 
 @if (_results.Count > 0)
 {
-    <FluentLabel Typo="Typography.PaneHeader" Style="margin-top:16px;display:block;">Results</FluentLabel>
-    @foreach (var result in _results)
-    {
-        <FluentCard Class="result-card">
-            <FluentStack Orientation="Orientation.Horizontal" Style="justify-content:space-between; width:100%;">
-                <strong>#@result.Issue.Number — @result.Issue.Title</strong>
-                <FluentBadge Appearance="Appearance.Neutral">@result.Issue.Source</FluentBadge>
-            </FluentStack>
+    <FluentLabel Typo="Typography.PaneHeader" Style="margin-top:28px;display:block;">
+        Results <FluentBadge Appearance="Appearance.Neutral">@_results.Count</FluentBadge>
+    </FluentLabel>
+    <FluentStack Orientation="Orientation.Vertical" VerticalGap="16" Style="margin-top:12px">
+        @foreach (var result in _results)
+        {
+            <FluentCard Class="result-card">
+                <FluentStack Orientation="Orientation.Vertical" VerticalGap="14">
 
-            <FluentStack Orientation="Orientation.Horizontal" Style="margin-top:8px">
-                <FluentBadge Appearance="Appearance.Accent">@result.Classification.Category (@result.Classification.Confidence)</FluentBadge>
-                <FluentBadge Appearance="@PriorityAppearance(result.Priority.Priority)">@result.Priority.Priority (score=@result.Priority.Score)</FluentBadge>
-            </FluentStack>
+                    <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" Style="justify-content:space-between; width:100%; gap:12px;">
+                        <FluentLabel Typo="Typography.Subject">#@result.Issue.Number — @result.Issue.Title</FluentLabel>
+                        <FluentBadge Appearance="Appearance.Lightweight">@result.Issue.Source</FluentBadge>
+                    </FluentStack>
 
-            <ul class="reason-list">
-                @foreach (var reason in result.Priority.Reasons)
-                {
-                    <li>@reason</li>
-                }
-            </ul>
+                    <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="flex-wrap:wrap">
+                        <FluentBadge Appearance="Appearance.Accent">@result.Classification.Category · @result.Classification.Confidence.ToString("P0") confidence</FluentBadge>
+                        <FluentBadge Appearance="@PriorityAppearance(result.Priority.Priority)">@result.Priority.Priority · score @result.Priority.Score</FluentBadge>
+                    </FluentStack>
 
-            <p><strong>Labels:</strong> @string.Join(", ", result.Labels.Labels)</p>
-            <p><strong>Next step:</strong> @result.Labels.NextStep</p>
+                    @if (result.Priority.Reasons.Count > 0)
+                    {
+                        <div>
+                            <FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="font-weight:600;display:block;margin-bottom:2px;">Why this priority</FluentLabel>
+                            <ul class="reason-list">
+                                @foreach (var reason in result.Priority.Reasons)
+                                {
+                                    <li>@reason</li>
+                                }
+                            </ul>
+                        </div>
+                    }
 
-            @if (result.AlreadyTriagedBefore)
-            {
-                <FluentMessageBar Intent="MessageIntent.Warning" Title="Already triaged before">
-                    This issue has prior triage history — see the History page.
-                </FluentMessageBar>
-            }
-        </FluentCard>
-    }
+                    <FluentDivider />
+
+                    <FluentStack Orientation="Orientation.Vertical" VerticalGap="10">
+                        <div>
+                            <FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="font-weight:600;display:block;margin-bottom:6px;">Labels</FluentLabel>
+                            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="6" Style="flex-wrap:wrap">
+                                @foreach (var label in result.Labels.Labels)
+                                {
+                                    <FluentBadge Appearance="@(label.Contains("review") ? Appearance.Accent : Appearance.Neutral)">@label</FluentBadge>
+                                }
+                            </FluentStack>
+                        </div>
+                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="8">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.ArrowRight())" Color="Color.Accent" />
+                            <FluentLabel Typo="Typography.Body"><strong>Next step:</strong> @result.Labels.NextStep</FluentLabel>
+                        </FluentStack>
+                    </FluentStack>
+
+                    @if (result.AlreadyTriagedBefore)
+                    {
+                        <FluentMessageBar Intent="MessageIntent.Warning" Title="Already triaged before">
+                            This issue has prior triage history — see the History page.
+                        </FluentMessageBar>
+                    }
+                </FluentStack>
+            </FluentCard>
+        }
+    </FluentStack>
 }
 
 @code {
@@ -107,13 +146,26 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _fixtures = await Api.GetFixturesAsync();
-        _selectedFixture = _fixtures.FirstOrDefault();
+        try
+        {
+            _fixtures = await Api.GetFixturesAsync();
+            _selectedFixture = _fixtures.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"could not load fixtures from the API: {ex.Message}";
+            _errorHint = "check that GithubIssueTriager.Api is running and Api:BaseUrl is correct";
+        }
     }
 
     private async Task TriageSelectedFixture()
     {
-        if (_selectedFixture is null) return;
+        if (string.IsNullOrWhiteSpace(_selectedFixture))
+        {
+            _errorMessage = "pick a fixture file first";
+            _errorHint = null;
+            return;
+        }
         await RunAndRender(() => Api.TriageJsonAsync(_selectedFixture!, _repoLabel));
     }
 

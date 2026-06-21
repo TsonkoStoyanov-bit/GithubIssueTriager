@@ -1,7 +1,25 @@
+# Build output
 bin/
 obj/
+
+# Local databases
 *.db
+
+# User-specific / IDE files
 *.user
 .vs/
+.vscode/
+.idea/
 *.unused
-/src/GithubIssueTriager.Api/appsettings.Development.json
+
+# Claude Code local tooling config (permissions, preview launch config)
+.claude/
+
+# Dev-only app config (may contain secrets like connection strings / tokens)
+appsettings.Development.json
+
+# ASP.NET Core Data Protection key ring (encryption keys — never commit)
+DataProtection-Keys/
+
+# Local diagnostic / scratch scripts
+diag-pub.sh
