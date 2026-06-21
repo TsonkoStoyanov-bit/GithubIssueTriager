@@ -3,56 +3,78 @@
 <PageTitle>Settings</PageTitle>
 
 <FluentLabel Typo="Typography.PageTitle">Configuration</FluentLabel>
-<FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin-bottom:16px;">
-    Read from / written back to <code>appsettings.json</code> on the Api host (the <code>Triage</code> section).
+<FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin:4px 0 20px;">
+    Read from / written back to <code>appsettings.json</code> on the Api host (the <code>Triage</code> section). Changes apply live — no restart.
 </FluentLabel>
 
 @if (_settings is null)
 {
-    <FluentProgressRing />
+    <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="8">
+        <FluentProgressRing Style="width:24px;height:24px" />
+        <FluentLabel Typo="Typography.Body" Color="Color.Neutral">Loading settings…</FluentLabel>
+    </FluentStack>
 }
 else
 {
     <FluentStack Orientation="Orientation.Vertical" VerticalGap="16" Style="max-width:560px">
 
-        <FluentCard>
-            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">Issue source</FluentLabel>
+        <FluentCard Class="form-card">
+            <div class="section-header">
+                <FluentIcon Value="@(new Icons.Regular.Size20.DocumentText())" Color="Color.Accent" />
+                <FluentLabel Typo="Typography.PaneHeader">Issue source</FluentLabel>
+            </div>
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
                 <FluentRadioGroup TValue="string" Name="issueSource" @bind-Value="_settings.IssueSource" Label="Issue source" Orientation="Orientation.Horizontal">
                     <FluentRadio Value="@("Local")">Local JSON</FluentRadio>
                     <FluentRadio Value="@("Remote")">Remote (GitHub API)</FluentRadio>
                 </FluentRadioGroup>
-                <FluentTextField @bind-Value="_settings.LocalJsonPath" Label="Local JSON folder (relative to Api content root)" />
+                <FluentTextField @bind-Value="_settings.LocalJsonPath" Label="Local JSON folder (relative to Api content root)" Style="width:100%" />
             </FluentStack>
         </FluentCard>
 
-        <FluentCard>
-            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">GitHub API</FluentLabel>
+        <FluentCard Class="form-card">
+            <div class="section-header">
+                <FluentIcon Value="@(new Icons.Regular.Size20.Cloud())" Color="Color.Accent" />
+                <FluentLabel Typo="Typography.PaneHeader">GitHub API</FluentLabel>
+            </div>
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
-                <FluentTextField @bind-Value="_settings.GitHubOwner" Label="Default owner" Placeholder="anthropics" />
-                <FluentTextField @bind-Value="_settings.GitHubRepo" Label="Default repo" Placeholder="claude-code" />
-                <FluentNumberField TValue="int" @bind-Value="_settings.GitHubIssueNumber" Label="Default issue number" />
-                <FluentTextField @bind-Value="_settings.GitHubToken" Label="Personal access token" TextFieldType="TextFieldType.Password" />
+                <FluentTextField @bind-Value="_settings.GitHubOwner" Label="Default owner" Placeholder="anthropics" Style="width:100%" />
+                <FluentTextField @bind-Value="_settings.GitHubRepo" Label="Default repo" Placeholder="claude-code" Style="width:100%" />
+                <FluentNumberField TValue="int" @bind-Value="_settings.GitHubIssueNumber" Label="Default issue number" Style="width:100%" />
+                <FluentTextField @bind-Value="_settings.GitHubToken" Label="Personal access token" TextFieldType="TextFieldType.Password" Style="width:100%" />
             </FluentStack>
         </FluentCard>
 
-        <FluentCard>
-            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">Priority thresholds (minimum score per level)</FluentLabel>
+        <FluentCard Class="form-card">
+            <div class="section-header">
+                <FluentIcon Value="@(new Icons.Regular.Size20.Flash())" Color="Color.Accent" />
+                <FluentLabel Typo="Typography.PaneHeader">Priority thresholds</FluentLabel>
+            </div>
+            <FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin-bottom:10px;">Minimum summed score required for each level.</FluentLabel>
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
-                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityCritical" Label="Critical ≥" />
-                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityHigh" Label="High ≥" />
-                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityMedium" Label="Medium ≥" />
+                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityCritical" Label="Critical ≥" Style="width:100%" />
+                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityHigh" Label="High ≥" Style="width:100%" />
+                <FluentNumberField TValue="int" @bind-Value="_settings.PriorityMedium" Label="Medium ≥" Style="width:100%" />
             </FluentStack>
         </FluentCard>
 
-        <FluentCard>
-            <FluentLabel Typo="Typography.PaneHeader" Style="display:block;margin-bottom:8px;">Classifier safety net</FluentLabel>
-            <FluentNumberField TValue="double" @bind-Value="_settings.LowConfidenceReviewThreshold" Label="Flag for human review when confidence is below" Step="0.05" Min="0" Max="1" />
+        <FluentCard Class="form-card">
+            <div class="section-header">
+                <FluentIcon Value="@(new Icons.Regular.Size20.ShieldCheckmark())" Color="Color.Accent" />
+                <FluentLabel Typo="Typography.PaneHeader">Classifier safety net</FluentLabel>
+            </div>
+            <FluentNumberField TValue="double" @bind-Value="_settings.LowConfidenceReviewThreshold" Label="Flag for human review when confidence is below" Step="0.05" Min="0" Max="1" Style="width:100%" />
         </FluentCard>
 
-        <FluentButton Appearance="Appearance.Accent" Disabled="@_saving" @onclick="Save">
-            Save settings
-        </FluentButton>
+        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12">
+            <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size16.Save())" Disabled="@_saving" @onclick="Save">
+                Save settings
+            </FluentButton>
+            @if (_saving)
+            {
+                <FluentProgressRing Style="width:20px;height:20px" />
+            }
+        </FluentStack>
 
         @if (_savedMessage is not null)
         {

@@ -3,13 +3,28 @@
 <PageTitle>History</PageTitle>
 
 <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" Style="justify-content:space-between;">
-    <FluentLabel Typo="Typography.PageTitle">Triage history</FluentLabel>
-    <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size16.ArrowClockwise())" @onclick="Load">Refresh</FluentButton>
+    <FluentLabel Typo="Typography.PageTitle">
+        Triage history
+        @if (_records is { Count: > 0 })
+        {
+            <FluentBadge Appearance="Appearance.Neutral">@_records.Count</FluentBadge>
+        }
+    </FluentLabel>
+    <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size16.ArrowClockwise())" Disabled="@(_records is null)" @onclick="Load">
+        Refresh
+    </FluentButton>
 </FluentStack>
+
+<FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin:4px 0 20px;">
+    Every issue the triage pipeline has processed, newest first.
+</FluentLabel>
 
 @if (_records is null)
 {
-    <FluentProgressRing />
+    <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="8">
+        <FluentProgressRing Style="width:24px;height:24px" />
+        <FluentLabel Typo="Typography.Body" Color="Color.Neutral">Loading history…</FluentLabel>
+    </FluentStack>
 }
 else if (_records.Count == 0)
 {
@@ -19,21 +34,40 @@ else if (_records.Count == 0)
 }
 else
 {
-    <FluentDataGrid Items="@_records.AsQueryable()" Style="margin-top:16px">
-        <PropertyColumn Property="@(r => r.TriagedAt)" Title="Triaged at" Sortable="true" />
-        <PropertyColumn Property="@(r => r.Repo)" Title="Repo" Sortable="true" />
-        <PropertyColumn Property="@(r => r.IssueNumber)" Title="#" Sortable="true" />
-        <PropertyColumn Property="@(r => r.Title)" Title="Title" />
-        <PropertyColumn Property="@(r => r.Category)" Title="Category" Sortable="true" />
-        <PropertyColumn Property="@(r => r.Priority)" Title="Priority" Sortable="true" />
-        <TemplateColumn Title="Labels">
-            @(context.Labels != null ? string.Join(", ", context.Labels) : "")
-        </TemplateColumn>
-    </FluentDataGrid>
+    <FluentCard Class="form-card">
+        <div style="overflow-x:auto">
+        <FluentDataGrid Items="@_records.AsQueryable()" GridTemplateColumns="0.9fr 1fr 0.4fr 2fr 1.3fr 1.1fr 1.5fr" Style="min-width:760px;width:100%">
+            <PropertyColumn Property="@(r => r.TriagedAt)" Title="Triaged at" Sortable="true" />
+            <PropertyColumn Property="@(r => r.Repo)" Title="Repo" Sortable="true" />
+            <PropertyColumn Property="@(r => r.IssueNumber)" Title="#" Sortable="true" />
+            <PropertyColumn Property="@(r => r.Title)" Title="Title" />
+
+            <TemplateColumn Title="Category" Sortable="true" SortBy="@_byCategory">
+                <FluentBadge Appearance="Appearance.Accent">@context.Category · @context.Confidence.ToString("P0")</FluentBadge>
+            </TemplateColumn>
+
+            <TemplateColumn Title="Priority" Sortable="true" SortBy="@_byPriority">
+                <FluentBadge Appearance="@PriorityAppearance(context.Priority)">@context.Priority · @context.PriorityScore</FluentBadge>
+            </TemplateColumn>
+
+            <TemplateColumn Title="Labels">
+                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" Style="flex-wrap:wrap">
+                    @foreach (var label in context.Labels ?? new())
+                    {
+                        <FluentBadge Appearance="@(label.Contains("review") ? Appearance.Accent : Appearance.Neutral)">@label</FluentBadge>
+                    }
+                </FluentStack>
+            </TemplateColumn>
+        </FluentDataGrid>
+        </div>
+    </FluentCard>
 }
 
 @code {
     private List<TriageRecord>? _records;
+
+    private readonly GridSort<TriageRecord> _byCategory = GridSort<TriageRecord>.ByAscending(r => r.Category);
+    private readonly GridSort<TriageRecord> _byPriority = GridSort<TriageRecord>.ByAscending(r => r.PriorityScore);
 
     [Inject] private TriageApiClient Api { get; set; } = default!;
 
@@ -44,4 +78,11 @@ else
         _records = null;
         _records = await Api.GetHistoryAsync(100);
     }
+
+    private static Appearance PriorityAppearance(string priority) => priority switch
+    {
+        "critical" => Appearance.Accent,
+        "high" => Appearance.Accent,
+        _ => Appearance.Neutral,
+    };
 }

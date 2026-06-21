@@ -23,6 +23,14 @@ html, body {
     margin-bottom: 8px;
 }
 
+/* Icon + heading row that titles each settings section. */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
 .result-card {
     padding: 20px 24px;
     border-radius: 8px;
