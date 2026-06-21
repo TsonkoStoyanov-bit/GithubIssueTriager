@@ -4,3 +4,4 @@ obj/
 *.user
 .vs/
 *.unused
+/src/GithubIssueTriager.Api/appsettings.Development.json
