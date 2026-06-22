@@ -10,11 +10,10 @@ Blazor UI) so the backend and front end can be built, deployed, and scaled
 independently — see "Design notes" below for the reasoning behind the
 classifier, priority engine, and label advisor specifically.
 
-> **Important — please read first:** this was written in a sandbox with no
-> .NET SDK installed and no outbound network access, so it could not be
-> compiled, restored, or run here. Everything below is written carefully
-> and reviewed by hand, but **you are the first one to actually build and
-> run it** — see "If something doesn't compile" at the bottom.
+> **Status:** builds, runs, and has been exercised end-to-end (including
+> against a real Postgres instance via `docker compose up`). A handful of
+> real compile/runtime bugs found along the way are documented in
+> `CLAUDE.md`'s "Known gotchas" section.
 
 ## Architecture — 4 projects in one solution
 
@@ -27,8 +26,11 @@ src/
     Priority/                  PriorityEngine + pluggable IPriorityHeuristic rules
     Labels/                    LabelAdvisor: labels + next step + review flag
     Services/                  ingestion, EF Core/Postgres store, orchestrator,
-                               settings (read/write appsettings.json)
-    Endpoints/                 /api/triage/*, /api/history, /api/settings
+                               settings (read/write the database-backed config)
+    Configuration/             EfTriageConfigurationSource: layers the Settings
+                               page's saved values into IConfiguration
+    Endpoints/                 /api/triage/*, /api/history, /api/history/next-issue,
+                               /api/settings
   GithubIssueTriager.Web/      Blazor Server UI (Fluent UI components)
     Components/Pages/          Triage.razor, History.razor, Settings.razor
     Services/TriageApiClient.cs   typed HttpClient calling the Api
@@ -86,9 +88,12 @@ Then edit `src/GithubIssueTriager.Api/appsettings.json`:
 ```
 
 Adjust `Username`/`Password`/`Port` to match your local Postgres instance.
-The `triage_history` table is created automatically on first run via EF
-Core's `Database.EnsureCreated()` — you don't need to create it by hand or
-run a separate migrations step.
+The schema (`triage_history` and `app_settings` tables) is created
+automatically on first run via EF Core migrations (`Database.Migrate()`),
+so you don't need to create it by hand. If you change an entity, generate a
+new migration with `dotnet ef migrations add <Name> --project
+src/GithubIssueTriager.Api` — `Migrate()` only applies migrations that
+already exist.
 
 ## Build & run
 
@@ -161,9 +166,9 @@ slim ASP.NET runtime image to actually run), and `.dockerignore` keeps
 
 ## Configuration form (Settings page)
 
-The Settings page reads from and writes back to the **Api's**
-`appsettings.json` (the `Triage` section), via `GET /api/settings` and
-`PUT /api/settings`:
+The Settings page reads from and writes back to a single `app_settings`
+row in Postgres (not `appsettings.json` on disk), via `GET /api/settings`
+and `PUT /api/settings`:
 
 - **Issue source** — Local JSON (reads from the `fixtures/` folder shipped
   with the Api) or Remote (live GitHub REST API).
@@ -174,9 +179,12 @@ The Settings page reads from and writes back to the **Api's**
 - **Classifier safety net** — the confidence threshold below which the
   `needs-human-review` label kicks in.
 
-Because the host's configuration was built with `reloadOnChange: true`
-(the default), saving settings updates the file and the running Api picks
-up the change automatically — no restart required.
+`appsettings.json`'s `Triage` section is only used to *seed* that database
+row the first time the app runs against an empty table — after that the
+table is the source of truth. Saving settings writes the row and calls
+`IConfigurationRoot.Reload()`, so the running Api picks up the change
+immediately, no restart required, and the JSON file on disk is never
+rewritten.
 
 ## Tests
 
@@ -186,27 +194,20 @@ dotnet test
 
 Covers the classifier (including the deliberately-tricky low-confidence
 case), the priority engine and its individual heuristics, the label advisor
-(including the new review-flag behaviour and its configurability), the
-EF Core store (against the EF Core in-memory provider), JSON/GitHub
-ingestion (the live-API failure path is tested against a deliberately
-non-resolvable host, so it doesn't depend on your network), and a few
-end-to-end API integration tests via `WebApplicationFactory` (with the
-Postgres-backed DbContext swapped for the in-memory provider, so
-`dotnet test` never needs Postgres running).
+(including the review-flag behaviour and its configurability), the EF Core
+store and the EF-backed settings/config provider (both against the EF Core
+in-memory provider), JSON/GitHub ingestion (the live-API failure path is
+tested against a deliberately non-resolvable host, so it doesn't depend on
+your network), and a set of end-to-end API integration tests via
+`WebApplicationFactory` — including regression tests for a request-validation
+bug found during manual testing (see `CLAUDE.md`'s "Known gotchas"). The
+Postgres-backed `DbContext` is swapped for the in-memory provider throughout,
+so `dotnet test` never needs Postgres running.
 
 ## If something doesn't compile
 
-This was hand-written without a compiler in the loop, so treat the first
-`dotnet build` as the real first draft review. Two places most likely to
-need a small fix if package versions have moved on since:
-
-- `Microsoft.FluentUI.AspNetCore.Components` version in
-  `GithubIssueTriager.Web.csproj` — if the pinned version doesn't resolve,
-  run `dotnet add package Microsoft.FluentUI.AspNetCore.Components` (no
-  version) to pick up whatever is current, then fix any component API
-  differences the compiler points out.
-- `Npgsql.EntityFrameworkCore.PostgreSQL` version in
-  `GithubIssueTriager.Api.csproj` — same idea, `dotnet add package <name>`
-  without a version pulls the latest compatible with `net10.0`.
-
-Paste me the exact build error if you'd like help fixing it.
+See `CLAUDE.md`'s "Known gotchas" section for the specific issues already
+found and fixed in this codebase (Fluent UI API differences, the
+`RenderMode` static-using requirement, the Swashbuckle v10 namespace move,
+etc.). If you hit something new, paste the exact build error and it can be
+diagnosed from there.
