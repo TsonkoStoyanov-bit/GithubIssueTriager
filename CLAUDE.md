@@ -43,7 +43,8 @@ GithubIssueTriager.Shared/   DTOs and option types shared by Api + Web (Issue, C
 GithubIssueTriager.Api/      ASP.NET Core minimal API
 GithubIssueTriager.Web/      Blazor Server UI (Fluent UI components)
 GithubIssueTriager.Tests/    xUnit — classifier, priority engine, label advisor, EF Core store,
-                              GitHub ingestion, and WebApplicationFactory-based API integration tests
+                              GitHub ingestion, the EF-backed config provider, and
+                              WebApplicationFactory-based API integration tests
 fixtures/                    5 mock GitHub issues used by the "Local JSON" issue source
 ```
 
@@ -67,24 +68,35 @@ advise labels → persist. Each stage is its own independently-testable piece:
   confidence is below `TriageOptions.LowConfidenceReviewThreshold`, it adds a `needs-human-review`
   label and rewrites the next step instead of presenting a low-confidence guess as settled.
 - **Storage** (`Services/ITriageStore.cs` → `EfTriageStore.cs`) — backed by EF Core
-  (`Data/TriageDbContext.cs`, `Data/TriageHistoryEntity.cs`) against PostgreSQL only
-  (`Npgsql.EntityFrameworkCore.PostgreSQL`). `Init()` calls `Database.EnsureCreated()` —
-  no separate `dotnet ef migrations` step to keep in sync by hand. Tests swap in the EF
-  Core in-memory provider (`Microsoft.EntityFrameworkCore.InMemory`) instead of hitting a
+  (`Data/TriageDbContext.cs`, `Data/TriageHistoryEntity.cs`, `Data/AppSettingsEntity.cs`) against
+  PostgreSQL only (`Npgsql.EntityFrameworkCore.PostgreSQL`). Schema is now kept up to date via real
+  EF Core migrations (`Migrations/`, applied with `Database.Migrate()`), not just
+  `EnsureCreated()` — see `Data/DatabaseBootstrapper.cs`, which calls `Migrate()` on the real
+  Npgsql provider and falls back to `EnsureCreated()` only for the in-memory provider used by
+  tests (which doesn't support migrations). **If you add/change an entity, generate a migration**
+  (`dotnet ef migrations add <Name> --project src/GithubIssueTriager.Api`) — `Migrate()` only
+  applies migrations that already exist, it won't infer schema changes on its own. Tests swap in
+  the EF Core in-memory provider (`Microsoft.EntityFrameworkCore.InMemory`) instead of hitting a
   real Postgres instance — see `EfTriageStoreTests.cs` and `ApiIntegrationTests.TestFactory`.
 - **Ingestion** (`Services/IIssueSource.cs` → `GitHubIssueSource.cs`) — fetches from the real GitHub
   REST API or reads from `fixtures/*.json`, selected by `TriageOptions.IssueSource` ("Local" vs
   "Remote"). Network failures surface as a clear error rather than crashing the request.
 
-### Live-reloading configuration
+### Live-reloading configuration (now database-backed, not file-backed)
 
-`TriageOptions` is read through `IOptionsMonitor<T>` (not a constructor-injected snapshot), and
-`appsettings.json`'s default `reloadOnChange: true` file watcher means the **Settings page writes
-back to the Api's `appsettings.json`** (`Services/SettingsService.cs`, via `GET`/`PUT /api/settings`)
-and the change applies immediately, no restart. This covers issue source (Local/Remote), GitHub
-owner/repo/issue number + token, priority thresholds, and the low-confidence review threshold.
-`DatabaseOptions` (the Postgres connection string) is *not* part of this live-reload path — it's
-read once at startup to configure the EF Core `DbContext`, so changing it needs a restart.
+`TriageOptions` is read through `IOptionsMonitor<T>` (not a constructor-injected snapshot). The
+live-reload source of truth is a single `app_settings` row in Postgres, not `appsettings.json`:
+`Configuration/EfTriageConfigurationSource.cs` is a custom `IConfigurationProvider` registered via
+`builder.Configuration.AddEfTriageSettings(...)` in `Program.cs`, layered on top of the JSON
+providers. On first load it seeds that row from whatever `appsettings.json` had under `Triage`;
+from then on the table is authoritative. The **Settings page** (`Services/SettingsService.cs`, via
+`GET`/`PUT /api/settings`) reads/writes that same row and calls `IConfigurationRoot.Reload()` after
+a save, so `IOptionsMonitor<TriageOptions>` consumers (PriorityEngine, LabelAdvisor, the endpoints)
+pick up the change immediately — no restart, and `appsettings.json` on disk is never rewritten.
+This covers issue source (Local/Remote), GitHub owner/repo/issue number + token (masked on read,
+only overwritten if the caller sends an unmasked value), priority thresholds, and the low-confidence
+review threshold. `DatabaseOptions` (the Postgres connection string) is *not* part of this path —
+it's read once at startup to configure the EF Core `DbContext`, so changing it still needs a restart.
 
 ### Known gotchas (found by an actual build, not just review)
 
