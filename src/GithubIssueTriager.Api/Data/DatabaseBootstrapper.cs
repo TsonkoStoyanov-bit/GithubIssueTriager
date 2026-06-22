@@ -5,10 +5,10 @@ namespace GithubIssueTriager.Api.Data;
 /// <summary>
 /// Brings the database schema up to date. On Npgsql this applies EF Core
 /// migrations — including a one-time baseline step for databases that were
-/// originally created by the old EnsureCreated path (they have the tables but no
-/// __EFMigrationsHistory, so a plain Migrate() would try to recreate them and
-/// fail with "relation already exists"). The in-memory provider used by tests
-/// doesn't support migrations, so it falls back to EnsureCreated.
+/// originally created by the old EnsureCreated path (they have the tables but
+/// InitialCreate isn't recorded, so a plain Migrate() would try to recreate them
+/// and fail with "relation already exists"). The in-memory provider used by
+/// tests doesn't support migrations, so it falls back to EnsureCreated.
 /// </summary>
 public static class DatabaseBootstrapper
 {
@@ -33,10 +33,12 @@ public static class DatabaseBootstrapper
     }
 
     /// <summary>
-    /// If the database already holds the schema but has no migrations-history table
-    /// (i.e. it was created by EnsureCreated before migrations existed), mark
-    /// InitialCreate as already applied — after making sure both of its tables
-    /// exist — so Migrate() skips it instead of failing on "already exists".
+    /// If the database already holds the schema but InitialCreate isn't recorded as
+    /// applied, mark it applied — after making sure both of its tables exist — so
+    /// Migrate() skips it instead of failing on "already exists". This covers a
+    /// database created by EnsureCreated, including the state left behind by an
+    /// earlier failed Migrate() (an empty __EFMigrationsHistory table plus the old
+    /// triage_history table).
     /// </summary>
     private static void BaselineLegacyDatabaseIfNeeded(TriageDbContext db)
     {
@@ -44,24 +46,30 @@ public static class DatabaseBootstrapper
         connection.Open();
         try
         {
-            bool Exists(string regclass)
+            bool Scalar(string sql)
             {
                 using var check = connection.CreateCommand();
-                check.CommandText = $"SELECT to_regclass('{regclass}') IS NOT NULL;";
+                check.CommandText = sql;
                 return (bool)check.ExecuteScalar()!;
             }
 
-            var historyExists = Exists("public.\"__EFMigrationsHistory\"");
-            var triageHistoryExists = Exists("public.triage_history");
+            // No legacy schema → fresh database: let Migrate() create everything.
+            if (!Scalar("SELECT to_regclass('public.triage_history') IS NOT NULL;"))
+                return;
 
-            // Only baseline a genuinely-legacy database: schema present, history absent.
-            if (!triageHistoryExists || historyExists)
+            var historyExists = Scalar("SELECT to_regclass('public.\"__EFMigrationsHistory\"') IS NOT NULL;");
+            var initialApplied = historyExists && Scalar(
+                $"SELECT EXISTS(SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '{InitialCreateMigrationId}');");
+
+            // Already migrated/baselined → nothing to do; Migrate() applies any newer ones.
+            if (initialApplied)
                 return;
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                -- app_settings may be missing on the oldest databases; create it to match
-                -- the InitialCreate schema before declaring that migration applied.
+                -- app_settings may be missing (oldest databases, or a rolled-back failed
+                -- migration); create it to match the InitialCreate schema before declaring
+                -- that migration applied.
                 CREATE TABLE IF NOT EXISTS app_settings (
                     "Id" integer NOT NULL,
                     "IssueSource" text NOT NULL,
