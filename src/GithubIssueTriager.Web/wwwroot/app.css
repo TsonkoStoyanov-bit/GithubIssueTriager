@@ -1,26 +1,127 @@
+/* ===========================================================================
+   GitHub Issue Auto-Triager — glassmorphism theme
+   Teams lilac→blue→turquoise gradient backdrop, frosted-glass cards, a glass
+   header and a floating bottom dock for navigation. Light + dark variants.
+   =========================================================================== */
+
 html, body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100%;
 }
 
-.main {
-    flex: 1;
+/* Vibrant fixed gradient — the whole app floats on top of this. */
+body {
+    margin: 0;
+    color: #fff;
+    background: linear-gradient(135deg, #5b6bc0 0%, #4f8edc 48%, #38c5d8 100%);
+    background-attachment: fixed;
+    position: relative;
 }
 
+/* Soft, slowly drifting "aurora" colour blobs layered over the gradient for a
+   living, non-static feel. Fixed + behind everything (z-index 0), never
+   intercepts clicks. */
+body::before {
+    content: "";
+    position: fixed;
+    inset: -20%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(38% 48% at 15% 18%, rgba(123, 47, 247, 0.45), transparent 60%),
+        radial-gradient(34% 44% at 85% 12%, rgba(56, 197, 216, 0.45), transparent 60%),
+        radial-gradient(46% 54% at 78% 88%, rgba(79, 142, 220, 0.40), transparent 62%),
+        radial-gradient(40% 50% at 25% 90%, rgba(98, 100, 167, 0.40), transparent 60%);
+    animation: auroraDrift 22s ease-in-out infinite alternate;
+}
+
+@keyframes auroraDrift {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(0, -3%, 0) scale(1.10); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body::before { animation: none; }
+}
+
+/* Lift the actual app above the aurora layer and let the gradient show through
+   the Fluent layout containers (which otherwise paint an opaque surface). */
+.fluent-layout {
+    position: relative;
+    z-index: 1;
+}
+
+.fluent-layout,
+.fluent-body-content,
+.body-content,
+fluent-body-content {
+    background: transparent !important;
+}
+
+/* ---- Glass header --------------------------------------------------------- */
+.app-header,
+.fluent-header {
+    background: rgba(76, 58, 140, 0.38) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 4px 24px rgba(31, 38, 135, 0.18);
+}
+
+/* ---- Layout / content ----------------------------------------------------- */
 .body-content {
     flex: 1;
-    padding: 24px;
+    /* extra bottom padding clears the floating dock so the last card isn't hidden */
+    padding: 28px 24px 130px;
 }
 
 .content {
-    max-width: 900px;
+    max-width: 1200px;
     margin: 0 auto;
 }
 
-/* Give the form and result cards a touch more breathing room and a softer,
-   elevated feel than the default flat Fluent card. */
+/* Page-level headings/copy sit directly on the gradient — keep them white so
+   they read as a bright "hero" title rather than dark-on-colour mud. Anything
+   inside a frosted card keeps its normal Fluent foreground colour. */
+.page-title {
+    color: #fff !important;
+    text-shadow: 0 1px 12px rgba(31, 38, 135, 0.25);
+}
+
+.page-subtitle {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* ---- Frosted glass cards -------------------------------------------------- */
+fluent-card {
+    --fill-color: rgba(255, 255, 255, 0.62);
+    background: rgba(255, 255, 255, 0.62) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(165%);
+    backdrop-filter: blur(18px) saturate(165%);
+    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.18);
+}
+
 .form-card {
-    padding: 20px 24px;
+    padding: 22px 26px;
     margin-bottom: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.result-card {
+    padding: 22px 26px;
+}
+
+/* Subtle entrance so results don't just pop in flatly. */
+.result-card {
+    animation: cardRise 0.35s ease both;
+}
+
+@keyframes cardRise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Icon + heading row that titles each settings section. */
@@ -31,22 +132,10 @@ html, body {
     margin-bottom: 12px;
 }
 
-.result-card {
-    padding: 20px 24px;
-    border-radius: 8px;
-    transition: box-shadow 0.15s ease-in-out;
-}
-
-.result-card:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
-}
-
-/* Use the Fluent design tokens instead of a hardcoded gray so the list reads
-   correctly in both light and dark mode. */
 .reason-list {
     margin: 4px 0 0 0;
     padding-left: 20px;
-    color: var(--neutral-foreground-hint, #666);
+    color: var(--neutral-foreground-hint, #5a5a6e);
     font-size: 0.9rem;
     line-height: 1.6;
 }
@@ -55,10 +144,159 @@ html, body {
     margin-bottom: 2px;
 }
 
+/* ===========================================================================
+   Colour-coded badges
+   FluentBadge renders <fluent-badge>; its visible chip lives in the shadow DOM
+   `control` part, so colour it via ::part(control). One class per category /
+   priority / label-kind, assigned in the Razor. Light chips read well on both
+   the light and dark frosted cards, so no separate dark-mode variants needed.
+   =========================================================================== */
+fluent-badge.cat-bug::part(control)           { background: #ffe2e4 !important; color: #c12539 !important; border: 1px solid #f4b0b7 !important; }
+fluent-badge.cat-feature::part(control)       { background: #dcf6ec !important; color: #0f7a53 !important; border: 1px solid #a6e5cd !important; }
+fluent-badge.cat-question::part(control)      { background: #e7ecff !important; color: #3a4fc4 !important; border: 1px solid #bcc8f6 !important; }
+fluent-badge.cat-documentation::part(control) { background: #fff1d6 !important; color: #97640f !important; border: 1px solid #f3d699 !important; }
+fluent-badge.cat-other::part(control)         { background: #ececf3 !important; color: #56566c !important; border: 1px solid #cfcfdc !important; }
+
+fluent-badge.prio-critical::part(control) { background: #fddedf !important; color: #b3122a !important; border: 1px solid #f2a7ad !important; }
+fluent-badge.prio-high::part(control)     { background: #ffe6cf !important; color: #b4540b !important; border: 1px solid #f6c596 !important; }
+fluent-badge.prio-medium::part(control)   { background: #e3edff !important; color: #2f55c1 !important; border: 1px solid #b8ccf5 !important; }
+fluent-badge.prio-low::part(control)      { background: #e6f3ea !important; color: #387c4e !important; border: 1px solid #bee0c8 !important; }
+
+/* Result/label chips: make the human-review flag stand out, keep the rest calm. */
+fluent-badge.lbl-review::part(control)  { background: #ffe6cf !important; color: #b4540b !important; border: 1px solid #f6c596 !important; }
+fluent-badge.lbl-default::part(control) { background: #eef0f6 !important; color: #4a4a60 !important; border: 1px solid #d4d7e3 !important; }
+
+/* ===========================================================================
+   Floating navigation dock
+   =========================================================================== */
+.dock {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 900;
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.16);
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(22px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow: 0 12px 44px rgba(31, 38, 135, 0.38);
+}
+
+.dock-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 16px;
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dock-item svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor !important;
+}
+
+.dock-item:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
+    transform: translateY(-3px);
+}
+
+.dock-item.active {
+    color: #5b3fb0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.82));
+    box-shadow: 0 8px 22px rgba(31, 38, 135, 0.30);
+}
+
+/* ===========================================================================
+   Dark mode — System theme follows the OS, so match prefers-color-scheme.
+   Darker frosted glass keeps Fluent's light foreground text readable.
+   =========================================================================== */
+@media (prefers-color-scheme: dark) {
+    body {
+        background: linear-gradient(135deg, #2a2350 0%, #1f3a66 50%, #134e57 100%);
+    }
+
+    .app-header,
+    .fluent-header {
+        background: rgba(20, 18, 44, 0.45) !important;
+    }
+
+    fluent-card {
+        --fill-color: rgba(28, 30, 58, 0.52);
+        background: rgba(28, 30, 58, 0.52) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    }
+
+    .reason-list {
+        color: rgba(255, 255, 255, 0.65);
+    }
+
+    .dock {
+        background: rgba(28, 30, 58, 0.45);
+        border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    .dock-item.active {
+        color: #d7c9ff;
+        background: linear-gradient(135deg, rgba(123, 47, 247, 0.55), rgba(56, 197, 216, 0.42));
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.40);
+    }
+}
+
+/* ===========================================================================
+   Responsive
+   =========================================================================== */
+@media (max-width: 640px) {
+    .body-content {
+        padding: 18px 14px 120px;
+    }
+
+    .form-card,
+    .result-card {
+        padding: 18px 16px;
+    }
+
+    .dock {
+        bottom: 14px;
+        gap: 3px;
+        padding: 6px;
+        border-radius: 20px;
+    }
+
+    .dock-item {
+        gap: 6px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .dock-item svg {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+/* ===========================================================================
+   Blazor error toast
+   =========================================================================== */
 #blazor-error-ui {
     background: lightyellow;
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0,0,0,0.2);
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
     display: none;
     left: 0;
     padding: 0.6rem 1.25rem 0.7rem 1.25rem;

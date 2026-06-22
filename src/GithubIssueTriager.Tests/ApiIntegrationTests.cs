@@ -86,8 +86,50 @@ public class ApiIntegrationTests : IClassFixture<ApiIntegrationTests.TestFactory
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task NextIssue_NoHistory_ReturnsOne()
+    {
+        // A repo with no triage history yet should suggest issue #1.
+        var response = await _client.GetAsync($"/api/history/next-issue?owner=fresh&repo=repo-{Guid.NewGuid():N}");
+        response.EnsureSuccessStatusCode();
+
+        var next = await response.Content.ReadFromJsonAsync<int>();
+        Assert.Equal(1, next);
+    }
+
+    [Fact]
+    public async Task NextIssue_AfterTriage_ReturnsHighestPlusOne()
+    {
+        // Triage a fixture into a uniquely-named repo so this test is isolated from
+        // any other history in the shared in-memory database.
+        const string owner = "org";
+        var repoName = $"next-{Guid.NewGuid():N}";
+
+        var triage = await _client.PostAsJsonAsync("/api/triage/json", new
+        {
+            fileName = "issue_201_memory_leak.json",
+            repo = $"{owner}/{repoName}",
+        });
+        triage.EnsureSuccessStatusCode();
+
+        // Read the actual issue number back rather than hard-coding the fixture's value.
+        var triaged = await triage.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var issueNumber = triaged.GetProperty("issue").GetProperty("number").GetInt32();
+
+        var response = await _client.GetAsync($"/api/history/next-issue?owner={owner}&repo={repoName}");
+        response.EnsureSuccessStatusCode();
+
+        var next = await response.Content.ReadFromJsonAsync<int>();
+        Assert.Equal(issueNumber + 1, next);
+    }
+
     public class TestFactory : WebApplicationFactory<Program>
     {
+        // One stable in-memory database name for the whole factory, so data written by
+        // one request is visible to the next (e.g. triage then read-back). Generated per
+        // factory instance with a Guid, so parallel test classes still can't collide.
+        private readonly string _dbName = $"triager-it-{Guid.NewGuid():N}";
+
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
             // By default WebApplicationFactory roots the host at the Api's *source*
@@ -114,7 +156,7 @@ public class ApiIntegrationTests : IClassFixture<ApiIntegrationTests.TestFactory
                     .BuildServiceProvider();
 
                 services.AddDbContext<TriageDbContext>(options =>
-                    options.UseInMemoryDatabase($"triager-it-{Guid.NewGuid():N}")
+                    options.UseInMemoryDatabase(_dbName)
                            .UseInternalServiceProvider(inMemoryProvider));
             });
         }

@@ -65,5 +65,12 @@ public class TriageOrchestrator
 
     public List<TriageRecord> GetHistory(int limit = 50) => _store.ListAll(limit);
 
+    /// <summary>
+    /// Suggests the next issue number to triage for a repo: one past the highest
+    /// number already triaged, or 1 when the repo has no history yet. Lets the UI
+    /// pre-fill the field from stored history instead of a hand-set default.
+    /// </summary>
+    public int GetNextIssueNumber(string repo) => (_store.GetMaxIssueNumber(repo) ?? 0) + 1;
+
     public IReadOnlyList<string> ListFixtures(string directoryPath) => _issueSource.ListFixtureFiles(directoryPath);
 }

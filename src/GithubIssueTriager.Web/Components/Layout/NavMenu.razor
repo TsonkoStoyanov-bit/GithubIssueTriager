@@ -1,11 +1,18 @@
-<FluentNavMenu Width="220" Title="Navigation" Class="nav-menu">
-    <FluentNavLink Href="/" Match="NavLinkMatch.All" Icon="@(new Icons.Regular.Size20.Flash())">
-        Triage
-    </FluentNavLink>
-    <FluentNavLink Href="/history" Icon="@(new Icons.Regular.Size20.History())">
-        History
-    </FluentNavLink>
-    <FluentNavLink Href="/settings" Icon="@(new Icons.Regular.Size20.Settings())">
-        Settings
-    </FluentNavLink>
-</FluentNavMenu>
+@* Floating glass dock pinned to the bottom-centre of the viewport. Plain <NavLink>
+   (not FluentNavLink) so the framework toggles the `active` class on the current route,
+   which app.css styles into the highlighted pill. FluentIcon renders the SVG; the dock CSS
+   forces `fill: currentColor` so each icon inherits the link's colour (white / accent). *@
+<nav class="dock" aria-label="Primary">
+    <NavLink class="dock-item" href="" Match="NavLinkMatch.All">
+        <FluentIcon Value="@(new Icons.Regular.Size24.Flash())" />
+        <span>Triage</span>
+    </NavLink>
+    <NavLink class="dock-item" href="history">
+        <FluentIcon Value="@(new Icons.Regular.Size24.History())" />
+        <span>History</span>
+    </NavLink>
+    <NavLink class="dock-item" href="settings">
+        <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" />
+        <span>Settings</span>
+    </NavLink>
+</nav>

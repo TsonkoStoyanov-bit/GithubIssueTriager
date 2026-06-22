@@ -29,6 +29,11 @@ public class TriageApiClient
     public async Task<List<TriageRecord>> GetHistoryAsync(int limit = 50, CancellationToken ct = default) =>
         await _http.GetFromJsonAsync<List<TriageRecord>>($"/api/history?limit={limit}", ct) ?? new();
 
+    /// <summary>Next issue number to triage for owner/repo, computed from stored history (last + 1, or 1).</summary>
+    public async Task<int> GetNextIssueNumberAsync(string owner, string repo, CancellationToken ct = default) =>
+        await _http.GetFromJsonAsync<int>(
+            $"/api/history/next-issue?owner={Uri.EscapeDataString(owner)}&repo={Uri.EscapeDataString(repo)}", ct);
+
     public async Task<TriageSettingsDto?> GetSettingsAsync(CancellationToken ct = default) =>
         await _http.GetFromJsonAsync<TriageSettingsDto>("/api/settings", ct);
 

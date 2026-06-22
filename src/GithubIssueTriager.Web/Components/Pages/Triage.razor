@@ -2,9 +2,9 @@
 
 <PageTitle>Triage</PageTitle>
 
-<FluentLabel Typo="Typography.PageTitle">Triage an issue</FluentLabel>
+<FluentLabel Typo="Typography.PageTitle" Class="page-title">Triage an issue</FluentLabel>
 
-<FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin:4px 0 20px;">
+<FluentLabel Typo="Typography.Body" Class="page-subtitle" Style="display:block;margin:4px 0 20px;">
     Classify, score and label a GitHub issue — from a local fixture or straight off the GitHub API.
 </FluentLabel>
 
@@ -16,7 +16,7 @@
                               OptionValue="@(f => f)" OptionText="@(f => f)"
                               @bind-Value="_selectedFixture" Label="Fixture file" Placeholder="Choose a fixture file" Style="width:100%" />
                 <FluentTextField @bind-Value="_repoLabel" Label="Repo label (for history)" Placeholder="example-org/example-repo" Style="width:100%" />
-                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8">
+                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Wrap="true">
                     <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size16.Flash())" Disabled="@(string.IsNullOrWhiteSpace(_selectedFixture) || _busy)" @onclick="TriageSelectedFixture">
                         Triage selected file
                     </FluentButton>
@@ -29,9 +29,14 @@
 
         <FluentTab Id="tab-remote" Label="Remote GitHub API" Icon="@(new Icons.Regular.Size20.Cloud())">
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="16" Style="max-width:480px;padding-top:8px">
-                <FluentTextField @bind-Value="_owner" Label="Owner" Placeholder="anthropics" Style="width:100%" />
-                <FluentTextField @bind-Value="_remoteRepo" Label="Repo" Placeholder="claude-code" Style="width:100%" />
-                <FluentNumberField TValue="int" @bind-Value="_issueNumber" Label="Issue number" Style="width:100%" />
+                <FluentTextField @bind-Value="_owner" @bind-Value:after="SuggestNextIssueAsync" Label="Owner" Placeholder="anthropics" Style="width:100%" />
+                <FluentTextField @bind-Value="_remoteRepo" @bind-Value:after="SuggestNextIssueAsync" Label="Repo" Placeholder="claude-code" Style="width:100%" />
+                <div>
+                    <FluentNumberField TValue="int" @bind-Value="_issueNumber" Label="Issue number" Style="width:100%" />
+                    <FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin-top:4px;font-size:0.82rem;">
+                        Auto-suggested from history (last triaged for this repo + 1). Edit if you need another.
+                    </FluentLabel>
+                </div>
                 <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size16.CloudArrowDown())" Disabled="@_busy" @onclick="TriageRemote">
                     Fetch &amp; triage from GitHub
                 </FluentButton>
@@ -65,7 +70,7 @@
 
 @if (_results.Count > 0)
 {
-    <FluentLabel Typo="Typography.PaneHeader" Style="margin-top:28px;display:block;">
+    <FluentLabel Typo="Typography.PaneHeader" Class="page-title" Style="margin-top:28px;display:block;">
         Results <FluentBadge Appearance="Appearance.Neutral">@_results.Count</FluentBadge>
     </FluentLabel>
     <FluentStack Orientation="Orientation.Vertical" VerticalGap="16" Style="margin-top:12px">
@@ -80,8 +85,8 @@
                     </FluentStack>
 
                     <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="flex-wrap:wrap">
-                        <FluentBadge Appearance="Appearance.Accent">@result.Classification.Category · @result.Classification.Confidence.ToString("P0") confidence</FluentBadge>
-                        <FluentBadge Appearance="@PriorityAppearance(result.Priority.Priority)">@result.Priority.Priority · score @result.Priority.Score</FluentBadge>
+                        <FluentBadge Class="@CategoryClass(result.Classification.Category)">@result.Classification.Category · @result.Classification.Confidence.ToString("P0") confidence</FluentBadge>
+                        <FluentBadge Class="@PriorityClass(result.Priority.Priority)">@result.Priority.Priority · score @result.Priority.Score</FluentBadge>
                     </FluentStack>
 
                     @if (result.Priority.Reasons.Count > 0)
@@ -105,7 +110,7 @@
                             <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="6" Style="flex-wrap:wrap">
                                 @foreach (var label in result.Labels.Labels)
                                 {
-                                    <FluentBadge Appearance="@(label.Contains("review") ? Appearance.Accent : Appearance.Neutral)">@label</FluentBadge>
+                                    <FluentBadge Class="@(label.Contains("review") ? "lbl-review" : "lbl-default")">@label</FluentBadge>
                                 }
                             </FluentStack>
                         </div>
@@ -158,7 +163,7 @@
         }
 
         // Pre-fill the Remote tab from the configured GitHub defaults (Settings page) so this
-        // tab acts as an editable override of the saved owner/repo/issue rather than repeating
+        // tab acts as an editable override of the saved owner/repo rather than repeating
         // unrelated placeholder values. The token stays Settings-only (it's secret). Best-effort:
         // a settings fetch failure just leaves the built-in placeholder defaults in place.
         try
@@ -168,12 +173,41 @@
             {
                 if (!string.IsNullOrWhiteSpace(settings.GitHubOwner)) _owner = settings.GitHubOwner;
                 if (!string.IsNullOrWhiteSpace(settings.GitHubRepo)) _remoteRepo = settings.GitHubRepo;
-                if (settings.GitHubIssueNumber > 0) _issueNumber = settings.GitHubIssueNumber;
+                // Issue number is no longer a saved setting — it's suggested from triage
+                // history below (SuggestNextIssueAsync), so there's nothing to pre-fill here.
+
+                // Honour the configured default issue source: open on the Remote tab when
+                // Settings is set to "Remote", otherwise stay on the Local JSON tab. This is
+                // what makes the Settings "Issue source" choice actually do something visible.
+                _activeTabId = string.Equals(settings.IssueSource, "Remote", StringComparison.OrdinalIgnoreCase)
+                    ? "tab-remote"
+                    : "tab-local";
             }
         }
         catch
         {
             // ignore — keep the placeholder defaults
+        }
+
+        // Override the issue number with the next one suggested from stored history
+        // for the current owner/repo, so it tracks what's actually been triaged.
+        await SuggestNextIssueAsync();
+    }
+
+    // Pre-fills the issue number from triage history (highest triaged for owner/repo + 1).
+    // Runs on load and whenever owner/repo change. Best-effort: a lookup failure just
+    // leaves whatever value is already in the field.
+    private async Task SuggestNextIssueAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_owner) || string.IsNullOrWhiteSpace(_remoteRepo))
+            return;
+        try
+        {
+            _issueNumber = await Api.GetNextIssueNumberAsync(_owner, _remoteRepo);
+        }
+        catch
+        {
+            // keep the current value if the suggestion lookup fails
         }
     }
 
@@ -209,10 +243,15 @@
 
     private async Task TriageRemote()
     {
-        await RunAndRender(() => Api.TriageGitHubAsync(_owner, _remoteRepo, _issueNumber));
+        var ok = await RunAndRender(() => Api.TriageGitHubAsync(_owner, _remoteRepo, _issueNumber));
+
+        // Step to the next issue after a successful pull so triaging a run of issues
+        // is just repeated clicks, with no manual renumbering between them.
+        if (ok)
+            _issueNumber++;
     }
 
-    private async Task RunAndRender(Func<Task<ApiResult<TriageResultDto>>> action)
+    private async Task<bool> RunAndRender(Func<Task<ApiResult<TriageResultDto>>> action)
     {
         _busy = true;
         _errorMessage = null;
@@ -230,12 +269,17 @@
             _errorMessage = result.Error;
             _errorHint = result.Hint;
         }
+
+        return result.Success;
     }
 
-    private static Appearance PriorityAppearance(string priority) => priority switch
-    {
-        "critical" => Appearance.Accent,
-        "high" => Appearance.Accent,
-        _ => Appearance.Neutral,
-    };
+    // Map category / priority to a CSS class that app.css colours via
+    // fluent-badge::part(control). Unknown categories fall back to a neutral chip.
+    private static readonly HashSet<string> KnownCategories =
+        new(StringComparer.OrdinalIgnoreCase) { "bug", "feature", "question", "documentation" };
+
+    private static string CategoryClass(string category) =>
+        KnownCategories.Contains(category) ? $"cat-{category.ToLowerInvariant()}" : "cat-other";
+
+    private static string PriorityClass(string priority) => $"prio-{priority.ToLowerInvariant()}";
 }

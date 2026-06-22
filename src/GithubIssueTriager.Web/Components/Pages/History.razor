@@ -3,7 +3,7 @@
 <PageTitle>History</PageTitle>
 
 <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" Style="justify-content:space-between;">
-    <FluentLabel Typo="Typography.PageTitle">
+    <FluentLabel Typo="Typography.PageTitle" Class="page-title">
         Triage history
         @if (_records is { Count: > 0 })
         {
@@ -15,7 +15,7 @@
     </FluentButton>
 </FluentStack>
 
-<FluentLabel Typo="Typography.Body" Color="Color.Neutral" Style="display:block;margin:4px 0 20px;">
+<FluentLabel Typo="Typography.Body" Class="page-subtitle" Style="display:block;margin:4px 0 20px;">
     Every issue the triage pipeline has processed, newest first.
 </FluentLabel>
 
@@ -36,38 +36,58 @@ else
 {
     <FluentCard Class="form-card">
         <div style="overflow-x:auto">
-        <FluentDataGrid Items="@_records.AsQueryable()" GridTemplateColumns="0.9fr 1fr 0.4fr 2fr 1.3fr 1.1fr 1.5fr" Style="min-width:760px;width:100%">
-            <PropertyColumn Property="@(r => r.TriagedAt)" Title="Triaged at" Sortable="true" />
+        <FluentDataGrid Items="@_records.AsQueryable()" Pagination="@_pagination" GridTemplateColumns="1.3fr 1.5fr 0.4fr 2fr 1.3fr 1.1fr 1.6fr" Style="min-width:900px;width:100%">
+            <TemplateColumn Title="Triaged at" Sortable="true" SortBy="@_byDate">
+                @FormatTimestamp(context.TriagedAt)
+            </TemplateColumn>
             <PropertyColumn Property="@(r => r.Repo)" Title="Repo" Sortable="true" />
             <PropertyColumn Property="@(r => r.IssueNumber)" Title="#" Sortable="true" />
             <PropertyColumn Property="@(r => r.Title)" Title="Title" />
 
             <TemplateColumn Title="Category" Sortable="true" SortBy="@_byCategory">
-                <FluentBadge Appearance="Appearance.Accent">@context.Category · @context.Confidence.ToString("P0")</FluentBadge>
+                <FluentBadge Class="@CategoryClass(context.Category)">@context.Category · @context.Confidence.ToString("P0")</FluentBadge>
             </TemplateColumn>
 
             <TemplateColumn Title="Priority" Sortable="true" SortBy="@_byPriority">
-                <FluentBadge Appearance="@PriorityAppearance(context.Priority)">@context.Priority · @context.PriorityScore</FluentBadge>
+                <FluentBadge Class="@PriorityClass(context.Priority)">@context.Priority · @context.PriorityScore</FluentBadge>
             </TemplateColumn>
 
             <TemplateColumn Title="Labels">
                 <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" Style="flex-wrap:wrap">
                     @foreach (var label in context.Labels ?? new())
                     {
-                        <FluentBadge Appearance="@(label.Contains("review") ? Appearance.Accent : Appearance.Neutral)">@label</FluentBadge>
+                        <FluentBadge Class="@(label.Contains("review") ? "lbl-review" : "lbl-default")">@label</FluentBadge>
                     }
                 </FluentStack>
             </TemplateColumn>
         </FluentDataGrid>
         </div>
+
+        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12" Style="margin-top:14px;flex-wrap:wrap">
+            <FluentPaginator State="@_pagination" />
+            <FluentLabel Typo="Typography.Body" Color="Color.Neutral">
+                @_records.Count total
+            </FluentLabel>
+        </FluentStack>
     </FluentCard>
 }
 
 @code {
     private List<TriageRecord>? _records;
 
+    private readonly PaginationState _pagination = new() { ItemsPerPage = 10 };
+
+    private readonly GridSort<TriageRecord> _byDate = GridSort<TriageRecord>.ByDescending(r => r.TriagedAt);
     private readonly GridSort<TriageRecord> _byCategory = GridSort<TriageRecord>.ByAscending(r => r.Category);
     private readonly GridSort<TriageRecord> _byPriority = GridSort<TriageRecord>.ByAscending(r => r.PriorityScore);
+
+    // TriagedAt is stored as a round-trip ("o") UTC string. Render it as a short, readable
+    // local date-time; if it somehow doesn't parse, fall back to the raw value rather than blank.
+    private static string FormatTimestamp(string iso) =>
+        DateTimeOffset.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var dt)
+            ? dt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")
+            : iso;
 
     [Inject] private TriageApiClient Api { get; set; } = default!;
 
@@ -79,10 +99,11 @@ else
         _records = await Api.GetHistoryAsync(100);
     }
 
-    private static Appearance PriorityAppearance(string priority) => priority switch
-    {
-        "critical" => Appearance.Accent,
-        "high" => Appearance.Accent,
-        _ => Appearance.Neutral,
-    };
+    private static readonly HashSet<string> KnownCategories =
+        new(StringComparer.OrdinalIgnoreCase) { "bug", "feature", "question", "documentation" };
+
+    private static string CategoryClass(string category) =>
+        KnownCategories.Contains(category) ? $"cat-{category.ToLowerInvariant()}" : "cat-other";
+
+    private static string PriorityClass(string priority) => $"prio-{priority.ToLowerInvariant()}";
 }
