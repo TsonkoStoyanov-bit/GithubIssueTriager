@@ -1,25 +1,31 @@
-# syntax=docker/dockerfile:1
+# See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
-# ---- Build stage ----
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-
-# Copy project files first so NuGet restore is cached unless dependencies change.
-COPY src/GithubIssueTriager.Shared/GithubIssueTriager.Shared.csproj src/GithubIssueTriager.Shared/
-COPY src/GithubIssueTriager.Api/GithubIssueTriager.Api.csproj src/GithubIssueTriager.Api/
-RUN dotnet restore src/GithubIssueTriager.Api/GithubIssueTriager.Api.csproj
-
-# Copy the rest of the source and publish.
-COPY src/GithubIssueTriager.Shared/ src/GithubIssueTriager.Shared/
-COPY src/GithubIssueTriager.Api/ src/GithubIssueTriager.Api/
-COPY fixtures/ fixtures/
-RUN dotnet publish src/GithubIssueTriager.Api/GithubIssueTriager.Api.csproj -c Release -o /app --no-restore
-
-# ---- Runtime stage ----
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# This stage is used when running from VS in fast mode (Default for Debug configuration)
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+USER $APP_UID
 WORKDIR /app
-ENV ASPNETCORE_URLS=http://+:8080
-ENV DOTNET_RUNNING_IN_CONTAINER=true
 EXPOSE 8080
-COPY --from=build /app .
+EXPOSE 8081
+
+
+# This stage is used to build the service project
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src
+COPY ["src/GithubIssueTriager.Api/GithubIssueTriager.Api.csproj", "src/GithubIssueTriager.Api/"]
+COPY ["src/GithubIssueTriager.Shared/GithubIssueTriager.Shared.csproj", "src/GithubIssueTriager.Shared/"]
+RUN dotnet restore "./src/GithubIssueTriager.Api/GithubIssueTriager.Api.csproj"
+COPY . .
+WORKDIR "/src/src/GithubIssueTriager.Api"
+RUN dotnet build "./GithubIssueTriager.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
+
+# This stage is used to publish the service project to be copied to the final stage
+FROM build AS publish
+ARG BUILD_CONFIGURATION=Release
+RUN dotnet publish "./GithubIssueTriager.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+
+# This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "GithubIssueTriager.Api.dll"]
