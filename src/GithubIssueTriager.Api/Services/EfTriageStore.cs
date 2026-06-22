@@ -74,6 +74,13 @@ public class EfTriageStore : ITriageStore
     public bool WasAlreadyTriaged(string repo, int issueNumber) =>
         _db.TriageHistory.Any(e => e.Repo == repo && e.IssueNumber == issueNumber);
 
+    // Cast to int? so Max() yields null (not an exception / 0) when the repo has
+    // no history yet — lets the caller tell "no rows" apart from "issue #0".
+    public int? GetMaxIssueNumber(string repo) =>
+        _db.TriageHistory
+            .Where(e => e.Repo == repo)
+            .Max(e => (int?)e.IssueNumber);
+
     private static TriageRecord ToRecord(TriageHistoryEntity e) => new(
         Id: e.Id,
         Repo: e.Repo,

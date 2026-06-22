@@ -75,4 +75,22 @@ public class EfTriageStoreTests : IDisposable
         Assert.Single(historyForIssue1);
         Assert.Equal(1, historyForIssue1[0].IssueNumber);
     }
+
+    [Fact]
+    public void GetMaxIssueNumber_IsNull_WhenRepoHasNoHistory()
+    {
+        Assert.Null(_store.GetMaxIssueNumber("org/repo"));
+    }
+
+    [Fact]
+    public void GetMaxIssueNumber_ReturnsHighest_ScopedToRepo()
+    {
+        var (classification, priority, labels) = SampleDecision();
+        _store.SaveDecision("org/repo", SampleIssue(3), classification, priority, labels);
+        _store.SaveDecision("org/repo", SampleIssue(7), classification, priority, labels);
+        // A different repo's higher number must not leak into org/repo's max.
+        _store.SaveDecision("other/repo", SampleIssue(99), classification, priority, labels);
+
+        Assert.Equal(7, _store.GetMaxIssueNumber("org/repo"));
+    }
 }
