@@ -2,7 +2,9 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
-USER $APP_UID
+# Run as root (not the template's $APP_UID): the Settings page writes back to
+# appsettings.json on the Api host, which a non-root user can't do for the
+# root-owned files copied into /app.
 WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
@@ -27,5 +29,10 @@ RUN dotnet publish "./GithubIssueTriager.Api.csproj" -c $BUILD_CONFIGURATION -o 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
 WORKDIR /app
+# Runtime settings the original hand-written Dockerfile had and the VS template
+# dropped: bind to 8080 (docker-compose maps it to host 5101), and flag the
+# container so the app skips HTTPS redirection (no dev cert inside the container).
+ENV ASPNETCORE_URLS=http://+:8080
+ENV DOTNET_RUNNING_IN_CONTAINER=true
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "GithubIssueTriager.Api.dll"]
