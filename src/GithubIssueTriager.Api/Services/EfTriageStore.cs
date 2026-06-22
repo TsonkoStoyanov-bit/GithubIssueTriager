@@ -22,10 +22,12 @@ public class EfTriageStore : ITriageStore
 
     public void Init()
     {
-        // EnsureCreated (rather than Migrations) keeps this self-contained for
-        // a small exam project — no separate `dotnet ef migrations` step or
-        // generated migration code to keep in sync by hand.
-        _db.Database.EnsureCreated();
+        // Apply EF Core migrations on a real database (and EnsureCreated on the
+        // in-memory provider used by tests). On the live app the configuration
+        // provider has usually migrated already, so this is a no-op; it stays so
+        // the in-memory store tests, which never touch that provider, still get a
+        // schema.
+        DatabaseBootstrapper.Bootstrap(_db);
     }
 
     public long SaveDecision(string repo, Issue issue, ClassificationResult classification, PriorityResult priority, LabelResult labels)

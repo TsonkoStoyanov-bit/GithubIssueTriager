@@ -36,26 +36,6 @@ public sealed class EfTriageConfigurationProvider : ConfigurationProvider
 
     public EfTriageConfigurationProvider(EfTriageConfigurationSource source) => _source = source;
 
-    // Column names/types match what EF Core's Npgsql provider generates for
-    // AppSettingsEntity (quoted PascalCase, text/integer/double precision), so this
-    // is a no-op when EF already created the table and a clean create otherwise.
-    private const string CreateAppSettingsTableSql = """
-        CREATE TABLE IF NOT EXISTS app_settings (
-            "Id" integer NOT NULL,
-            "IssueSource" text NOT NULL,
-            "LocalJsonPath" text NOT NULL,
-            "GitHubOwner" text NOT NULL,
-            "GitHubRepo" text NOT NULL,
-            "GitHubIssueNumber" integer NOT NULL,
-            "GitHubToken" text NOT NULL,
-            "PriorityCritical" integer NOT NULL,
-            "PriorityHigh" integer NOT NULL,
-            "PriorityMedium" integer NOT NULL,
-            "LowConfidenceReviewThreshold" double precision NOT NULL,
-            CONSTRAINT "PK_app_settings" PRIMARY KEY ("Id")
-        );
-        """;
-
     public override void Load()
     {
         try
@@ -64,17 +44,11 @@ public sealed class EfTriageConfigurationProvider : ConfigurationProvider
             _source.ConfigureDb(options);
             using var db = new TriageDbContext(options.Options);
 
-            // EnsureCreated is idempotent and matches how the triage store
-            // bootstraps its schema — no separate migration step to keep in sync.
-            db.Database.EnsureCreated();
-
-            // EnsureCreated only creates tables when the database has *none*, so a
-            // database that already held triage_history (created before this table
-            // existed) would be left without app_settings. Add it explicitly so an
-            // existing database is upgraded in place. Guarded to relational providers
-            // — the in-memory provider used in tests doesn't support raw SQL.
-            if (db.Database.IsRelational())
-                db.Database.ExecuteSqlRaw(CreateAppSettingsTableSql);
+            // Apply pending migrations so a newly added table/column reaches an
+            // existing database too (EnsureCreated only ever creates a schema from
+            // scratch). This is the earliest place the schema is needed — the
+            // settings read below depends on app_settings existing.
+            DatabaseBootstrapper.Bootstrap(db);
 
             var row = db.AppSettings.SingleOrDefault();
             if (row is null)
