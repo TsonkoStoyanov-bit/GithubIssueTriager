@@ -16,7 +16,7 @@
 </FluentStack>
 
 <FluentLabel Typo="Typography.Body" Class="page-subtitle" Style="display:block;margin:4px 0 20px;">
-    Every issue the triage pipeline has processed, newest first.
+    Every issue the triage pipeline has processed — one row per issue (latest attempt), newest first.
 </FluentLabel>
 
 @if (_records is null)
@@ -42,7 +42,13 @@ else
             </TemplateColumn>
             <PropertyColumn Property="@(r => r.Repo)" Title="Repo" Sortable="true" />
             <PropertyColumn Property="@(r => r.IssueNumber)" Title="#" Sortable="true" />
-            <PropertyColumn Property="@(r => r.Title)" Title="Title" />
+            <TemplateColumn Title="Title">
+                @context.Title
+                @if (_attempts.TryGetValue((context.Repo, context.IssueNumber), out var attempts) && attempts > 1)
+                {
+                    <FluentBadge Class="lbl-default" Style="margin-left:6px" title="@($"Triaged {attempts} times — showing the latest")">↻ @attempts×</FluentBadge>
+                }
+            </TemplateColumn>
 
             <TemplateColumn Title="Category" Sortable="true" SortBy="@_byCategory">
                 <FluentBadge Class="@CategoryClass(context.Category)">@context.Category · @context.Confidence.ToString("P0")</FluentBadge>
@@ -66,7 +72,7 @@ else
         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12" Style="margin-top:14px;flex-wrap:wrap">
             <FluentPaginator State="@_pagination" />
             <FluentLabel Typo="Typography.Body" Color="Color.Neutral">
-                @_records.Count total
+                @_records.Count issue(s)
             </FluentLabel>
         </FluentStack>
     </FluentCard>
@@ -74,6 +80,9 @@ else
 
 @code {
     private List<TriageRecord>? _records;
+
+    // How many times each repo+issue was triaged, so a collapsed row can show a count.
+    private Dictionary<(string Repo, int IssueNumber), int> _attempts = new();
 
     private readonly PaginationState _pagination = new() { ItemsPerPage = 10 };
 
@@ -96,7 +105,21 @@ else
     private async Task Load()
     {
         _records = null;
-        _records = await Api.GetHistoryAsync(100);
+        _attempts = new();
+
+        // The store keeps every triage attempt (re-triaging an issue is intentionally
+        // not overwritten), so the raw history contains duplicates per issue. Collapse
+        // them here to one row per repo+issue — the most recent attempt — while keeping
+        // a count of how many times each was triaged. The API returns newest-first, so
+        // the first record in each group is the latest.
+        var all = await Api.GetHistoryAsync(200);
+        _attempts = all
+            .GroupBy(r => (r.Repo, r.IssueNumber))
+            .ToDictionary(g => g.Key, g => g.Count());
+        _records = all
+            .GroupBy(r => (r.Repo, r.IssueNumber))
+            .Select(g => g.First())
+            .ToList();
     }
 
     private static readonly HashSet<string> KnownCategories =
