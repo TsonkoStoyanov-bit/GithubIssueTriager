@@ -18,8 +18,19 @@ public class TriageDbContext : DbContext
 
     public DbSet<TriageHistoryEntity> TriageHistory => Set<TriageHistoryEntity>();
 
+    /// <summary>Single-row table backing the editable Triage settings.</summary>
+    public DbSet<AppSettingsEntity> AppSettings => Set<AppSettingsEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AppSettingsEntity>(entity =>
+        {
+            entity.ToTable("app_settings");
+            entity.HasKey(e => e.Id);
+            // Never auto-generate the key — we manage the single row with a fixed Id.
+            entity.Property(e => e.Id).ValueGeneratedNever();
+        });
+
         modelBuilder.Entity<TriageHistoryEntity>(entity =>
         {
             entity.ToTable("triage_history");
