@@ -1,4 +1,5 @@
 using GithubIssueTriager.Api.Classification;
+using GithubIssueTriager.Api.Configuration;
 using GithubIssueTriager.Api.Data;
 using GithubIssueTriager.Api.Endpoints;
 using GithubIssueTriager.Api.Labels;
@@ -11,17 +12,24 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<TriageOptions>(builder.Configuration.GetSection(TriageOptions.SectionName));
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
+
+var dbOptions = builder.Configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>() ?? new DatabaseOptions();
+if (string.IsNullOrWhiteSpace(dbOptions.ConnectionString))
+    throw new InvalidOperationException("Database:ConnectionString is empty in appsettings.json.");
+
+// Layer the database-backed Triage settings on top of appsettings.json so the DB is the
+// single source of truth and every IOptionsMonitor<TriageOptions> consumer reads it with no
+// code change. The appsettings.json "Triage" values seed the table the first time it's empty.
+var settingsSeed = builder.Configuration.GetSection(TriageOptions.SectionName).Get<TriageOptions>() ?? new TriageOptions();
+builder.Configuration.AddEfTriageSettings(opt => opt.UseNpgsql(dbOptions.ConnectionString), settingsSeed);
+
+builder.Services.Configure<TriageOptions>(builder.Configuration.GetSection(TriageOptions.SectionName));
 
 builder.Services.AddHttpClient<IIssueSource, GitHubIssueSource>();
 builder.Services.AddSingleton<LexiconClassifier>();
 builder.Services.AddSingleton<PriorityEngine>();
 builder.Services.AddSingleton<LabelAdvisor>();
-
-var dbOptions = builder.Configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>() ?? new DatabaseOptions();
-if (string.IsNullOrWhiteSpace(dbOptions.ConnectionString))
-    throw new InvalidOperationException("Database:ConnectionString is empty in appsettings.json.");
 
 builder.Services.AddDbContext<TriageDbContext>(options => options.UseNpgsql(dbOptions.ConnectionString));
 builder.Services.AddScoped<ITriageStore, EfTriageStore>();
